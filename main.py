@@ -49,5 +49,4 @@ async def main():
     os._exit(0)
 
 if __name__ == "__main__":
-    # generate_access_token()
     asyncio.run(main())

@@ -12,18 +12,18 @@ IMAGE_NAME="first-strategy-app"
 CONTAINER_NAME="first-strategy-app"
 
 # Step 1: Remove old container (if exists)
-docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+# docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
 # # Step 2: Remove old image (optional)
-docker rmi -f "$IMAGE_NAME" 2>/dev/null || true
+# docker rmi -f "$IMAGE_NAME" 2>/dev/null || true
 
 # # Step 3: Build Docker image (relative Dockerfile path)
-docker build -t "$IMAGE_NAME" -f "$DIR/Dockerfile" "$DIR"
+# docker build -t "$IMAGE_NAME" -f "$DIR/Dockerfile" "$DIR"
 
 # Step 4: Run container with local volume mount
-# docker run --rm \
-#   --name "$CONTAINER_NAME" \
-#   -v "$DIR":/first-strategy \
-#   -e TZ=Asia/Kolkata \
-#   "$IMAGE_NAME"
+docker run --rm \
+  --name "$CONTAINER_NAME" \
+  -v "$DIR":/first-strategy \
+  -e TZ=Asia/Kolkata \
+  "$IMAGE_NAME"
 
