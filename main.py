@@ -1,3 +1,4 @@
+#main.py file
 import asyncio
 from data_order_manager.order_websocket_manager import FyersOrderManager
 from data_order_manager.candle_data_websocket import FyersWSManager
@@ -5,15 +6,12 @@ from strategy_one import strategy_one
 from logger import logger
 import os
 from dotenv import load_dotenv
-from datetime import datetime, timedelta,date
+from datetime import datetime, timedelta
 import time
 from fyers_token import generate_access_token
+from event_bus import event_bus
 
 load_dotenv()
-    
-generate_access_token()
-
-COMBINED_TOKEN = f'{os.getenv("CLIENT_ID")}:{os.getenv("FYERS_ACCESS_TOKEN")}'
 
 def wait_until_precise(target_time_str, extra_seconds=0):
     target_hour, target_minute = map(int, target_time_str.split(":"))
@@ -37,9 +35,11 @@ async def main():
     order_mgr = FyersOrderManager.get_instance(access_token=COMBINED_TOKEN)
     order_mgr.connect()
 
+    event_bus.wire_sources(ws_mgr, order_mgr, loop)
+
     wait_until_precise("09:16", extra_seconds=35) #9:16:35
 
-    await strategy_one(ws_mgr, order_mgr, loop, max_trades=1)
+    await strategy_one(ws_mgr, loop, max_trades=1)
 
     ws_mgr.stop()
     order_mgr.stop()
@@ -49,4 +49,11 @@ async def main():
     os._exit(0)
 
 if __name__ == "__main__":
+
+    #generate access token only one time for the day Start 9am
+    generate_access_token()
+    time.sleep(2)
+    COMBINED_TOKEN = f'{os.getenv("CLIENT_ID")}:{os.getenv("FYERS_ACCESS_TOKEN")}'
+
+    #run main funtion
     asyncio.run(main())
