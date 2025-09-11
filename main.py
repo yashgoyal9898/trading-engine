@@ -8,7 +8,6 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import time
-from fyers_token import generate_access_token
 from event_bus import event_bus
 
 load_dotenv()
@@ -50,9 +49,6 @@ async def main():
 
 if __name__ == "__main__":
 
-    #generate access token only one time for the day Start 9am
-    generate_access_token()
-    time.sleep(2)
     COMBINED_TOKEN = f'{os.getenv("CLIENT_ID")}:{os.getenv("FYERS_ACCESS_TOKEN")}'
 
     #run main funtion

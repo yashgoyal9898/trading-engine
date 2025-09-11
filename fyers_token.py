@@ -80,7 +80,8 @@ def generate_access_token():
 
     update_env_file("FYERS_ACCESS_TOKEN_DATE", str(date.today()))
 
-    logger.info("🔐 Access token updated in .env file.")
+    logger.info("Access token updated in .env file.")
 
     return access_token
 
+generate_access_token()
