@@ -1,7 +1,8 @@
-.env
-__pycache__
-*.pyc
-*.pyo
+__pycache__/
+*.py[cod]
 *.pyd
 *.swp
 *.swo
+*.log
+logger_files/
+.env*

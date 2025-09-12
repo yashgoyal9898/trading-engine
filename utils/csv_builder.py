@@ -1,3 +1,4 @@
+#csv_builder.py
 import csv
 import os
 import json
@@ -6,7 +7,7 @@ from datetime import datetime
 # -----------------------------
 # Config
 # -----------------------------
-CSV_DIR = os.path.join(os.getcwd(), "csv")
+CSV_DIR = os.path.join(os.getcwd(), "logger_files", "csv")
 CSV_FILE = os.path.join(CSV_DIR, f"trades_{datetime.now().strftime('%Y-%m-%d')}.csv")
 
 

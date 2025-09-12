@@ -3,7 +3,7 @@
 .env.*
 
 # Python cache
-__pycache__
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -23,8 +23,5 @@ venv/
 .DS_Store
 Thumbs.db
 
-
-log/
-csv/
-
-access_token.py
+#custom files
+logger_files/

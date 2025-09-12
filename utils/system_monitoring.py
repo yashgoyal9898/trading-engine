@@ -7,7 +7,7 @@ import sys
 import atexit
 from datetime import datetime
 from typing import Optional, Dict, Any
-from logger import logger
+from utils.logger import logger
 
 # Global variables for module-level interface
 _monitor_thread = None

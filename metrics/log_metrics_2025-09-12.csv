@@ -1,5 +1,0 @@
-logs_processed,logs_dropped,worker_errors,flush_timeouts,cross_thread_calls,batch_operations,json_validation_errors,dynamic_level_changes,avg_batch_size,max_queue_size,uptime_hours,logs_per_second,error_rate_pct,timestamp
-2,0,0,0,2,0,0,0,0.0,0,0.0,1.05,0.0,2025-09-12T09:13:26.435794
-2,0,0,0,2,0,0,0,0.0,0,0.0,1.05,0.0,2025-09-12T09:13:26.437811
-1,0,0,0,0,1,0,0,1.0,0,0.0,0.1,0.0,2025-09-12T09:13:56.931281
-8,0,0,0,1,8,0,0,1.0,0,0.09,0.03,0.0,2025-09-12T09:18:56.957014

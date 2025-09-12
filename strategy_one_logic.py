@@ -1,7 +1,7 @@
 from order_management import place_order, modify_order, get_main_stop_target_orders
 from datetime import datetime, timedelta
 import calendar
-from logger import logger
+from utils.logger import logger
 from active_order_state import ActiveOrderState, ORDER_BOOK
 import math
 
@@ -17,7 +17,7 @@ async def check_strategy_condition(symbol, candle):
 
     body_percentage = abs(c - o) / (h - l) * 100
 
-    if body_percentage < 90:
+    if body_percentage < 5:
         return False, None, None
 
     if c != o:  # skip doji-like candles where open == close

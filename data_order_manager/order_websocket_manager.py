@@ -1,6 +1,6 @@
 from fyers_apiv3.FyersWebsocket import order_ws
 import threading
-from logger import logger
+from utils.logger import logger
 
 class FyersOrderManager:
     _instance = None

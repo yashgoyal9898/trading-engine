@@ -4,7 +4,7 @@ import asyncio
 import threading
 from fyers_apiv3.FyersWebsocket import data_ws
 from dotenv import load_dotenv
-from logger import logger
+from utils.logger import logger
 
 load_dotenv()
 ACCESS_TOKEN = os.getenv("FYERS_ACCESS_TOKEN")

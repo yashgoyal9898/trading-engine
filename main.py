@@ -3,23 +3,24 @@ import asyncio
 from data_order_manager.order_websocket_manager import FyersOrderManager
 from data_order_manager.candle_data_websocket import FyersWSManager
 from strategy_one import strategy_one  
-from logger import logger
+from utils.logger import logger
 import os
 from dotenv import load_dotenv
 from event_bus import event_bus
+from utils.error_handling import error_handling
 
 load_dotenv()
 
+@error_handling
 async def main():
     loop = asyncio.get_running_loop()
 
     ws_mgr = FyersWSManager.get_instance()
     ws_mgr.start()
-
     order_mgr = FyersOrderManager.get_instance(access_token=COMBINED_TOKEN)
     order_mgr.connect()
 
-    logger.info("started................................")
+    logger.info("Algo started |................................")
 
     event_bus.wire_sources(ws_mgr, order_mgr, loop)
 
@@ -28,7 +29,7 @@ async def main():
     ws_mgr.stop()
     order_mgr.stop()
 
-    logger.info("[Main] Program terminated.")
+    logger.info("[Main] Program terminated |....................")
     
     os._exit(0)
 
