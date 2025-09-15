@@ -66,7 +66,7 @@ async def strategy_one(ws_mgr, loop, max_trades):
             if not processed:
                 await asyncio.sleep(0.001)
 
-
+    #only detect the trade closes not opening
     async def trade_close_consumer():
         nonlocal active_order_id, trades_done, active_strike_price_name
         while not stop_event.is_set():
@@ -75,18 +75,20 @@ async def strategy_one(ws_mgr, loop, max_trades):
                 continue
                 
             pos = trade_close_queue.get_nowait()
-            ws_mgr.unsubscribe_symbol(active_strike_price_name)
-            
-            # Save trade details to CSV
-            order_obj = await OrderManager.get_order(active_order_id)
-            if order_obj:
-                await log_trade(trades_done, active_order_id, order_obj.to_dict())
-                await OrderManager.remove_order(active_order_id)
-                logger.info(f"[Order Closed] {active_order_id} removed from OrderManager")
-                logger.info(f"[strategy_one] Trade {trades_done} closed")
-            
-            active_strike_price_name = None
-            active_order_id = None
+            #trade close for that sysmbol and strategy
+            if "NSE:IDEA-EQ" in pos["id"] and pos.get("netQty", None) == 0:
+                #unsubscibe tick for that symbol | used for trailling
+                ws_mgr.unsubscribe_symbol(active_strike_price_name)
+                # Save trade details to CSV
+                order_obj = await OrderManager.get_order(active_order_id)
+                if order_obj:
+                    await log_trade(trades_done, active_order_id, order_obj.to_dict())
+                    await OrderManager.remove_order(active_order_id)
+                    logger.info(f"[Order Closed] {active_order_id} removed from OrderManager")
+                    logger.info(f"[strategy_one] Trade {trades_done} closed")
+                #reset 
+                active_strike_price_name = None
+                active_order_id = None
 
     # ---------------- Run All Consumers ----------------
     await asyncio.gather(
