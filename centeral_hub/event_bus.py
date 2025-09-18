@@ -40,7 +40,7 @@ class EventBus:
         )
 
     # ---------------- Wiring Helpers ----------------
-    def wire_sources(self, ws_mgr, order_mgr, loop):
+    def start(self, ws_mgr, order_mgr, loop):
         # Candle feed
         ws_mgr.subscribe_symbol(
             "NSE:NIFTY50-INDEX",
