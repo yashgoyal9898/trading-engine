@@ -4,12 +4,9 @@ from websocket_manager.position_manager.fyers_position_webscoket import FyersOrd
 from websocket_manager.data_manager.fyers_data_websocket import FyersWSManager
 from strategy.strategy_one import strategy_one  
 from utils.logger import logger
-import os
-from dotenv import load_dotenv
 from centeral_hub.event_bus import event_bus
 from utils.error_handling import error_handling
-
-load_dotenv()
+import os
 
 @error_handling
 async def main():
@@ -19,9 +16,9 @@ async def main():
 
     #data and postion websocket
     ws_mgr = FyersWSManager.get_instance()
-    ws_mgr.start()
-    order_mgr = FyersOrderManager.get_instance(access_token=COMBINED_TOKEN)
-    order_mgr.connect()
+    await ws_mgr.start()
+    order_mgr = FyersOrderManager.get_instance()
+    await order_mgr.connect()
 
     #event bus started 
     event_bus.start(ws_mgr, order_mgr, loop)
@@ -32,16 +29,12 @@ async def main():
     await strategy_one("strategy_one", ws_mgr, loop, max_trades=1)
 
     #stop websocket 
-    ws_mgr.stop()
-    order_mgr.stop()
+    await ws_mgr.stop()
+    await order_mgr.stop()
 
     logger.info("[Main] Program terminated....................")
     
     os._exit(0)
 
 if __name__ == "__main__":
-
-    COMBINED_TOKEN = f'{os.getenv("CLIENT_ID")}:{os.getenv("FYERS_ACCESS_TOKEN")}'
-
-    #run main funtion
     asyncio.run(main())
