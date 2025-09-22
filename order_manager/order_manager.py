@@ -1,7 +1,9 @@
 import asyncio
 from typing import ClassVar, Dict, List
-from order_manager.order_placement import get_main_stop_target_orders
+from order_manager.fyers_order_placement import get_main_stop_target_orders
+from utils.error_handling import error_handling
 
+@error_handling
 class OrderManager:
     # Class-level registry for all active orders
     _registry: ClassVar[Dict[str, "OrderManager"]] = {}

@@ -1,4 +1,4 @@
-from order_manager.order_placement import place_order, modify_order
+from order_manager.fyers_order_placement import place_order, modify_order
 from datetime import datetime, timedelta
 import calendar
 from utils.logger import logger
