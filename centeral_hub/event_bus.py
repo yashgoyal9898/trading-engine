@@ -1,7 +1,9 @@
 # event_bus.py file
 import asyncio
 from typing import Callable, Any, Dict, List, Tuple
+from utils.error_handling import error_handling 
 
+@error_handling
 class EventBus:
     def __init__(self):
         self.subscribers: Dict[str, List[Tuple[asyncio.Queue, Callable[[Any], bool]]]] = {}
