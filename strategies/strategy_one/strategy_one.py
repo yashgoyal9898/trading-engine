@@ -98,10 +98,9 @@ class StrategyOne:
 
     # ------------------ Run ------------------
     async def run(self):
-        await asyncio.gather(
-            self.candle_consumer(),
-            self.tick_consumer(),
-            self.trade_close_consumer()
-        )
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(self.candle_consumer())
+            tg.create_task(self.tick_consumer())
+            tg.create_task(self.trade_close_consumer())
+
         logger.info(f"[{self.strategy_id} | ENDED")
-        return
