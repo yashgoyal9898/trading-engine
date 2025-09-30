@@ -2,7 +2,7 @@ from fyers_apiv3.FyersWebsocket import order_ws
 import asyncio
 from utils.error_handling import error_handling
 from utils.logger import logger
-from centeral_hub.event_bus import event_bus
+from centeral_hub.event_bus import EventBus
 from dotenv import load_dotenv
 import os
 
@@ -59,7 +59,7 @@ class FyersOrderManager:
         positions_list = positions if isinstance(positions, list) else [positions]
         for pos in positions_list:
             # Publish to event_bus instead of callbacks
-            asyncio.run_coroutine_threadsafe(event_bus.publish("trade_close", pos), self._loop)
+            asyncio.run_coroutine_threadsafe(EventBus.publish("trade_close", pos), self._loop)
 
     async def connect(self):
         self._loop = asyncio.get_running_loop()

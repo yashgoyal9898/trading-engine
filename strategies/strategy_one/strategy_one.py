@@ -4,7 +4,7 @@ from strategies.strategy_one.strategy_one_logic import strategy_logic_manager
 from strategies.strategy_one.strategy_one_trailling import strategy_one_trailing
 from utils.csv_builder import csv_builder
 from utils.logger import logger
-from centeral_hub.event_bus import event_bus
+from centeral_hub.event_bus import EventBus
 from order_manager.order_manager import OrderManager
 from utils.error_handling import error_handling
 
@@ -16,9 +16,9 @@ class StrategyOne:
         self.loop = loop
         self.max_trades = max_trades
 
-        self.candle_queue = event_bus.subscribe("candle")
-        self.tick_queue = event_bus.subscribe("tick")
-        self.trade_close_queue = event_bus.subscribe("trade_close")
+        self.candle_queue = EventBus.subscribe("candle")
+        self.tick_queue = EventBus.subscribe("tick")
+        self.trade_close_queue = EventBus.subscribe("trade_close")
 
         self.trades_done = 0
         self.active_order_id = None

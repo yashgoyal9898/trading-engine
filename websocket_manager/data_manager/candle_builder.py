@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 from utils.logger import logger
-from centeral_hub.event_bus import event_bus
+from centeral_hub.event_bus import EventBus
 
 def align_to_candle_boundary(dt, tf):
     session_start = dt.replace(hour=9, minute=15, second=0, microsecond=0)
@@ -68,7 +68,7 @@ class CandleBuilder:
         self.last_close[symbol] = candle["close"]
 
         # Publish to event_bus instead of callbacks
-        await event_bus.publish("candle", (symbol, candle))
+        await EventBus.publish("candle", (symbol, candle))
 
         self.tick_processor.cleanup_old_ticks(symbol, end.timestamp())
 

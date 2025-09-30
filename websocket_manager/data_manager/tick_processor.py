@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime
 from collections import deque
 from utils.logger import logger
-from centeral_hub.event_bus import event_bus
+from centeral_hub.event_bus import EventBus
 
 class TickProcessor:
 
@@ -29,7 +29,7 @@ class TickProcessor:
         self.last_tick_time[symbol] = ts
 
         # Publish to event_bus instead of callbacks
-        await event_bus.publish("tick", (symbol, tick))
+        await EventBus.publish("tick", (symbol, tick))
         return True
 
     def get_ticks_in_range(self, symbol, start, end):
