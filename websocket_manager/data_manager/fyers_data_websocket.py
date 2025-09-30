@@ -1,82 +1,87 @@
-# fyers_data_websocket.py
 import os
 import threading
 import asyncio
+import json
 from dotenv import load_dotenv
 from fyers_apiv3.FyersWebsocket import data_ws
 from utils.logger import logger
-from .base import BaseWSManager
 from utils.error_handling import error_handling
+from .broker_interface import BrokerInterface
 
 load_dotenv()
 
 @error_handling
-class FyersTransport:
-    def __init__(self, access_token, reconnect=True, litemode=False, write_to_file=False):
+class FyersBroker(BrokerInterface):
+    """Fyers-specific broker implementation using queues"""
+
+    def __init__(self, access_token=None):
+        self._token = access_token or os.getenv("FYERS_ACCESS_TOKEN")
+        if not self._token:
+            logger.warning("FYERS_ACCESS_TOKEN is missing")
         self._socket = None
-        self._opts = {
-            "access_token": access_token,
-            "reconnect": reconnect,
-            "litemode": litemode,
-            "write_to_file": write_to_file,
-        }
         self._thread = None
         self._running = False
-        self._queue = None
         self._loop = None
+        self._queue: asyncio.Queue = None
+        self._connected = False
 
-    def start(self, loop, queue: asyncio.Queue, on_open=None, on_error=None, on_close=None):
-        self._queue = queue
-        self._loop = loop
+    async def connect(self, queue: asyncio.Queue):
+        if self._running:
+            return
         self._running = True
-        self._thread = threading.Thread(
-            target=self._run_ws, args=(on_open, on_error, on_close), daemon=True
-        )
-        self._thread.start()
+        self._loop = asyncio.get_running_loop()
+        self._queue = queue
 
-    def _run_ws(self, on_open, on_error, on_close):
+        self._thread = threading.Thread(target=self._run_ws, daemon=True)
+        self._thread.start()
+        logger.info("[Fyers] Connecting...")
+
+    def _run_ws(self):
+        def _on_open():
+            self._connected = True
+            logger.info("[Fyers] Connected")
+
         def _on_message(message):
-            if self._running and self._loop:
-                asyncio.run_coroutine_threadsafe(self._queue.put(message), self._loop)
+            msg = json.loads(message) if isinstance(message, str) else message
+            if self._running and self._queue:
+                asyncio.run_coroutine_threadsafe(self._queue.put(msg), self._loop)
+
+        def _on_error(error):
+            logger.error(f"[Fyers] Error: {error}")
+
+        def _on_close(msg):
+            self._connected = False
+            logger.info(f"[Fyers] Closed: {msg}")
 
         self._socket = data_ws.FyersDataSocket(
-            on_connect=on_open,
+            access_token=self._token,
+            reconnect=True,
+            litemode=False,
+            write_to_file=False,
+            on_connect=_on_open,
             on_message=_on_message,
-            on_error=on_error,
-            on_close=on_close,
-            **self._opts
+            on_error=_on_error,
+            on_close=_on_close
         )
         self._socket.connect()
         self._socket.keep_running()
 
-    def subscribe(self, symbols, topic=None):
-        if self._socket:
-            self._socket.subscribe(symbols, topic or "SymbolUpdate")
-
-    def unsubscribe(self, symbols):
-        if self._socket:
-            self._socket.unsubscribe(symbols)
-
-    def close(self):
+    async def disconnect(self):
         self._running = False
+        self._connected = False
         if self._socket:
             self._socket.close_connection()
+        logger.info("[Fyers] Disconnected")
 
-@error_handling
-class FyersWSManager(BaseWSManager):
-    _instance = None
-    _lock = threading.Lock()
+    def subscribe(self, symbols: list):
+        if self._socket and self._connected:
+            self._socket.subscribe(symbols, "SymbolUpdate")
+            logger.info(f"[Fyers] Subscribed: {symbols}")
 
-    @staticmethod
-    def get_instance():
-        if FyersWSManager._instance is None:
-            with FyersWSManager._lock:
-                if FyersWSManager._instance is None:
-                    FyersWSManager._instance = FyersWSManager()
-        return FyersWSManager._instance
+    def unsubscribe(self, symbols: list):
+        if self._socket and self._connected:
+            self._socket.unsubscribe(symbols)
+            logger.info(f"[Fyers] Unsubscribed: {symbols}")
 
-    def __init__(self, access_token=None):
-        token = access_token or os.getenv("FYERS_ACCESS_TOKEN")
-        if not token:
-            logger.warning("FYERS_ACCESS_TOKEN is empty.")
-        super().__init__(transport=FyersTransport(token))
+    def is_connected(self) -> bool:
+        return self._connected
