@@ -1,11 +1,12 @@
 # strategy/strategy_one.py
 import asyncio
-from strategies.strategy_one.strategy_one_logic import strategy_logic_manager
+from strategies.strategy_one.strategy_one_logic import StrategyLogicManager
 from strategies.strategy_one.strategy_one_trailling import strategy_one_trailing
 from utils.csv_builder import CSVBuilder
 from utils.logger import logger
 from centeral_hub.event_bus import EventBus
 from order_manager.order_manager import OrderManager
+from order_placement_manager.fyers_order_placement import FyersOrderPlacement
 from utils.error_handling import error_handling
 
 @error_handling 
@@ -17,6 +18,8 @@ class StrategyOne:
         self.max_trades = max_trades
 
         self.csv_builder = CSVBuilder()
+        self.strategy_logic_manager = StrategyLogicManager()
+        self.fyers_order_placement = FyersOrderPlacement()
 
         self.candle_queue = EventBus.subscribe("candle")
         self.tick_queue = EventBus.subscribe("tick")
@@ -50,7 +53,7 @@ class StrategyOne:
                 logger.info(f"[{self.strategy_id}] Trade {self.trades_done} PNL: {realized}")
             self.active_order_id = None
         elif self.active_order_id: #--- TRADE OPEN -----  
-            await OrderManager.add_order(self.strategy_id, self.active_order_id, position_id, active_symbol)
+            await OrderManager.add_order(self.fyers_order_placement, self.strategy_id, self.active_order_id, position_id, active_symbol)
             self.ws_mgr.subscribe_symbol(
                 "NSE:NIFTY25OCT24800CE",
                 mode="tick",
@@ -72,8 +75,10 @@ class StrategyOne:
                         if not task.done():
                             task.cancel()
                     break  
-                condition_met, self.active_order_id = await strategy_logic_manager.check_entry_condition(self.strategy_id, symbol, candle)
+                condition_met = await self.strategy_logic_manager.check_entry_condition(self.strategy_id, symbol, candle)
                 if condition_met:
+                    order_response = await self.fyers_order_placement.place_order(symbol="NSE:IDEA-EQ", qty=1, order_type=2, side=1, stop_loss=0.5, take_profit=2.0)
+                    self.active_order_id = order_response.get("id")
                     self.trades_done += 1
                     logger.info(f"[{self.strategy_id}] Order placed with ID: {self.active_order_id}")
 
@@ -81,9 +86,7 @@ class StrategyOne:
         while True:
             symbol, tick = await self.tick_queue.get()  
             if self.active_order_id:
-                await strategy_one_trailing.start_trailing_sl(
-                    self.strategy_id, symbol, self.active_order_id, tick
-                )
+                await strategy_one_trailing.start_trailing_sl(self.fyers_order_placement, self.strategy_id, symbol, self.active_order_id, tick)
 
     async def trade_close_consumer(self):
         while True:

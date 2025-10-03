@@ -61,5 +61,3 @@ class FyersOrderPlacement:
                     target_order = order
 
         return main_order, stop_order, target_order
-
-fyers_order_placement = FyersOrderPlacement()

@@ -1,6 +1,5 @@
 from utils.logger import logger
 from order_manager.order_manager import OrderManager
-from order_manager.fyers_order_placement import fyers_order_placement
 from utils.error_handling import error_handling     
 
 @error_handling
@@ -8,8 +7,7 @@ class StrategyOneTrailing:
     def __init__(self):
         pass
 
-    async def start_trailing_sl(self, strategy_id, symbol: str, active_order_id: str, tick: dict):
-        # Get order from OrderManager
+    async def start_trailing_sl( self, fyers_order_placement=None, strategy_id=None, symbol: str = "", active_order_id: str = "", tick: dict = None ):
         order_obj = await OrderManager.get_order(active_order_id)
         if not order_obj:
             return
