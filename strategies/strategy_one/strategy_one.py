@@ -5,7 +5,7 @@ from strategies.strategy_one.strategy_one_trailling import strategy_one_trailing
 from utils.csv_builder import CSVBuilder
 from utils.logger import logger
 from centeral_hub.event_bus import EventBus
-from order_active_state_manager.order_state_manager import OrderManager
+from order_active_state_manager.order_state_manager import TradeManager
 from order_placement_manager.fyers_order_placement import FyersOrderPlacement
 from utils.error_handling import error_handling
 
@@ -44,16 +44,15 @@ class StrategyOne:
 
         if self.active_order_id and net_qty == 0:  #--- TRADE CLOSE ----- 
             self.ws_mgr.unsubscribe_symbol("NSE:NIFTY25OCT24800CE")
-            order_obj = await OrderManager.get_order(self.active_order_id)
-            if order_obj:
-                trade_data = order_obj.to_trade_done_data(trade_no=self.trades_done)
+            trade_data = await TradeManager.close_trade(self.strategy_id, self.active_order_id)
+            if trade_data:
+                trade_data.trade_no = self.trades_done
                 await self.csv_builder.log_trade(trade_data)
-                await OrderManager.remove_order(self.active_order_id)
                 logger.info(f"[{self.strategy_id}] Trade {self.trades_done} closed")
                 logger.info(f"[{self.strategy_id}] Trade {self.trades_done} PNL: {realized}")
             self.active_order_id = None
         elif self.active_order_id: #--- TRADE OPEN -----  
-            await OrderManager.add_order(self.fyers_order_placement, self.strategy_id, self.active_order_id, position_id, active_symbol)
+            await TradeManager.add_trade(self.fyers_order_placement, self.strategy_id, self.active_order_id, position_id, active_symbol)
             self.ws_mgr.subscribe_symbol("NSE:NIFTY25OCT24800CE", mode="tick")
             logger.info(f"[{self.strategy_id}] Position OPEN: {active_symbol}, Qty: {net_qty}")
 

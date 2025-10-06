@@ -1,26 +1,21 @@
 from utils.logger import logger
-from order_active_state_manager.order_state_manager import OrderManager
-from utils.error_handling import error_handling     
+from utils.error_handling import error_handling
+from order_active_state_manager.order_state_manager import TradeManager
 
 @error_handling
 class StrategyOneTrailing:
-    def __init__(self):
-        pass
-
-    async def start_trailing_sl( self, fyers_order_placement=None, strategy_id=None, symbol: str = "", active_order_id: str = "", tick: dict = None ):
-        order_obj = await OrderManager.get_order(active_order_id)
-        if not order_obj:
+    async def start_trailing_sl(self, fyers_order_placement, strategy_id: str, symbol: str, order_id: str, tick: dict):
+        trade_data = await TradeManager.get_trade(strategy_id, order_id)
+        if not trade_data or not tick:
             return
 
         tick_ltp = tick.get("ltp")
         if tick_ltp is None:
             return
 
-        stop_order_id = order_obj.stop_order_id
-
-        for level in order_obj.trailing_levels:
-            # Skip if already applied successfully
-            if any(hist["level"] == level["msg"] for hist in order_obj.trailing_history):
+        stop_order_id = trade_data.stop_order_id
+        for level in trade_data.trailing_levels:
+            if any(hist["level"] == level["msg"] for hist in trade_data.trailing_history):
                 continue
 
             if tick_ltp > level["threshold"]:
@@ -33,26 +28,19 @@ class StrategyOneTrailing:
                         qty=1,
                     )
                 except Exception as e:
-                    logger.error(f"[{strategy_id}] | [Trailing SL Error] {symbol} | Level: {level['msg']} | {e}")
+                    logger.error(f"[{strategy_id}] Trailing SL Error {symbol} | {level['msg']} | {e}")
                     continue
 
                 if res.get('code') == 1102:
-                    # Record successful update
-                    order_obj.trailing_history.append({
+                    # Update trade trailing history
+                    await TradeManager.update_trailing_history(strategy_id, order_id, {
                         "ltp": tick_ltp,
                         "level": level["msg"],
                         "stop_price": level["new_stop"]
                     })
-
-                    # Update in OrderManager
-                    await OrderManager.update_order(active_order_id, trailing_history=order_obj.trailing_history)
-
-                    logger.info(
-                        f"[{strategy_id}] | [Trailing SL Update] {symbol} | New Stop: {level['new_stop']} ({level['msg']}) LTP: {tick_ltp}"
-                    )
+                    logger.info(f"[{strategy_id}] Trailing SL updated {symbol} | {level['msg']} LTP: {tick_ltp}")
                     break
                 else:
-                    logger.warning(f"[{strategy_id}] | [Trailing SL Failed] {symbol} | Level: {level['msg']} | Response: {res}")
-                    continue
+                    logger.warning(f"[{strategy_id}] Trailing SL failed {symbol} | {level['msg']} Response: {res}")
 
 strategy_one_trailing = StrategyOneTrailing()
