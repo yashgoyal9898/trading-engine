@@ -32,12 +32,14 @@ class FyersOrderManager(BrokerInterface):
             on_close=self._on_close,
             on_error=self._on_error,
             on_positions=self._on_position,
+            on_orders=self._on_order,
         )
     
     def _on_open(self):
         self._connected = True
         logger.info("[Order WS] Connected")
         self.subscribe("OnPositions")
+        self.subscribe("OnOrders")
     
     def _on_close(self, msg):
         self._connected = False
@@ -50,10 +52,14 @@ class FyersOrderManager(BrokerInterface):
         positions = msg.get("positions")
         if not positions:
             return
-        
         positions_list = positions if isinstance(positions, list) else [positions]
         for pos in positions_list:
-            asyncio.run_coroutine_threadsafe(EventBus.publish("trade_close", pos), self._loop)
+            asyncio.run_coroutine_threadsafe(EventBus.publish("fyers_position_update", pos), self._loop)
+    
+    def _on_order(self, msg):
+        if not msg:
+            return
+        asyncio.run_coroutine_threadsafe(EventBus.publish("fyers_order_update", msg), self._loop)
     
     async def connect(self, queue: asyncio.Queue = None):
         """Connect order websocket. Queue parameter ignored."""
