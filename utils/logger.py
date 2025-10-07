@@ -68,6 +68,9 @@ class Logger:
 
     def debug(self, msg):
         self._log("DEBUG", msg)
+    
+    def warning(self, msg):
+        self._log("WARNING", msg)
 
     async def flush(self):
         if self._worker_started:

@@ -25,7 +25,6 @@ class StrategyOne:
         self.candle_queue = EventBus.subscribe("candle")
         self.tick_queue = EventBus.subscribe("tick")
         self.trade_close_queue = EventBus.subscribe("fyers_position_update")
-        self.order_update = EventBus.subscribe("fyers_order_update")
 
         self.trades_done = 0
         self.active_order_id = None
@@ -90,21 +89,11 @@ class StrategyOne:
             pos = await self.trade_close_queue.get()  
             await self.manage_position(pos)
 
-    # 1 => Canceled, 2 => Traded / Filled, 3 => (Not used currently), 4 => Transit, 5 => Rejected, 6 => Pending, 7 => Expired.
-    async def broker_order_consumer(self):
-        while True:
-            msg = await self.order_update.get()
-            order = msg.get("orders", {})
-            if order.get("status") == 2:
-                logger.info(f"[Consumer] Order filled: {order}")
-            await asyncio.sleep(0)
-
     # ------------------ Run ------------------
     async def run(self):
         async with asyncio.TaskGroup() as tg:
             candle_task = tg.create_task(self.candle_consumer())
             tick_task = tg.create_task(self.tick_consumer())
             broker_postion_task = tg.create_task(self.broker_postion_consumer())
-            broker_order_task = tg.create_task(self.broker_order_consumer())
             
-            self.tasks = [candle_task, tick_task, broker_postion_task, broker_order_task]
+            self.tasks = [candle_task, tick_task, broker_postion_task]
