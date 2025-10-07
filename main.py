@@ -1,7 +1,7 @@
 import asyncio
-from websocket_manager.data_manager.base import BaseWSManager
-from websocket_manager.data_manager.fyers_data_websocket import FyersBroker
-from websocket_manager.position_manager.fyers_position_webscoket import FyersOrderManager
+from websocket_manager.fyers_broker.fyers_data_websocket import FyersDataBroker
+from websocket_manager.fyers_broker.fyers_position_webscoket import FyersOrderPositionTracker
+from websocket_manager.data_manager.base import FyersWSManager
 from strategies.strategy_one.strategy_one import StrategyOne
 from utils.logger import logger
 from utils.error_handling import error_handling
@@ -14,11 +14,9 @@ async def main():
     loop = asyncio.get_running_loop()
     
     # Initialize both brokers using same interface
-    data_broker = FyersBroker()
-    order_broker = FyersOrderManager()
-    
-    # Initialize manager with both websockets
-    ws_mgr = BaseWSManager(data_broker=data_broker, order_broker=order_broker)
+    data_socket = FyersDataBroker()
+    position_order_socket = FyersOrderPositionTracker()
+    ws_mgr = FyersWSManager(data_broker=data_socket, order_broker=position_order_socket)
     
     # Start all connections
     await ws_mgr.start()

@@ -5,12 +5,12 @@ from utils.logger import logger
 from centeral_hub.event_bus import EventBus
 from dotenv import load_dotenv
 import os
-from websocket_manager.data_manager.broker_interface import BrokerInterface
+from .broker_interface import BrokerInterface
 
 load_dotenv()
 
 @error_handling
-class FyersOrderManager(BrokerInterface):
+class FyersOrderPositionTracker(BrokerInterface):
     
     def __init__(self, access_token=None):
         client_id = os.getenv("CLIENT_ID")
@@ -62,7 +62,6 @@ class FyersOrderManager(BrokerInterface):
         asyncio.run_coroutine_threadsafe(EventBus.publish("fyers_order_update", msg), self._loop)
     
     async def connect(self, queue: asyncio.Queue = None):
-        """Connect order websocket. Queue parameter ignored."""
         self._loop = asyncio.get_running_loop()
         self._task = self._loop.run_in_executor(None, self.fyers.connect)
         logger.info("[Order WS] Connection established")

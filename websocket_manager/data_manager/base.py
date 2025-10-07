@@ -3,10 +3,11 @@ from utils.logger import logger
 from utils.error_handling import error_handling
 from .tick_processor import TickProcessor
 from .candle_builder import CandleBuilder
-from .broker_interface import BrokerInterface
+from websocket_manager.fyers_broker.broker_interface import BrokerInterface
+from .base_interface import BaseWSManager
 
 @error_handling
-class BaseWSManager:
+class FyersWSManager(BaseWSManager):
     def __init__(
         self, 
         data_broker: BrokerInterface,
@@ -22,6 +23,32 @@ class BaseWSManager:
         self.candle_builder = candle_builder or CandleBuilder(self.tick_processor)
         self.tick_queue = asyncio.Queue()
         self.log = logger
+
+    async def start(self):
+        if self._running:
+            return
+        self._running = True
+        
+        # Start data broker connection
+        await self.data_broker.connect(self.tick_queue)
+        await self.order_broker.connect(self.tick_queue)
+        
+        # Wait until data broker is connected
+        while not self.data_broker.is_connected() and not self.order_broker.is_connected():
+            await asyncio.sleep(0.1)
+
+        # Start queue processor
+        asyncio.create_task(self._process_broker_msg_queue())
+    
+    async def stop(self):
+        if not self._running:
+            return
+        self._running = False
+        
+        await self.data_broker.disconnect()
+        await self.order_broker.disconnect()
+        
+        self.log.info("[Manager] Stopped all websockets")
     
     def subscribe_symbol(self, symbol, mode="candle", timeframe=30):
         if symbol not in self.symbols:
@@ -53,37 +80,3 @@ class BaseWSManager:
                         symbol, message, cfg["timeframe"]
                     )
     
-    async def start(self):
-        if self._running:
-            return
-        self._running = True
-        
-        # Start queue processor
-        asyncio.create_task(self._process_broker_msg_queue())
-        
-        # Start data broker connection
-        await self.data_broker.connect(self.tick_queue)
-
-        # Start order broker if provided
-        if self.order_broker:
-            await self.order_broker.connect()
-        
-        # Wait until data broker is connected
-        while not self.data_broker.is_connected() and not self.order_broker.is_connected():
-            await asyncio.sleep(0.1)
-        
-        self.log.info("[Manager] Started both data and order websockets")
-    
-    async def stop(self):
-        if not self._running:
-            return
-        self._running = False
-        
-        # Disconnect order broker
-        if self.order_broker:
-            await self.order_broker.disconnect()
-        
-        # Disconnect data broker
-        await self.data_broker.disconnect()
-        
-        self.log.info("[Manager] Stopped all websockets")

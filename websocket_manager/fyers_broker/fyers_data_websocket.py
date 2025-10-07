@@ -11,9 +11,7 @@ from .broker_interface import BrokerInterface
 load_dotenv()
 
 @error_handling
-class FyersBroker(BrokerInterface):
-    """Fyers-specific broker implementation using queues"""
-
+class FyersDataBroker(BrokerInterface):
     def __init__(self, access_token=None):
         self._token = access_token or os.getenv("FYERS_ACCESS_TOKEN")
         if not self._token:
