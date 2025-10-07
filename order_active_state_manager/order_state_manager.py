@@ -60,19 +60,6 @@ class TradeManager:
             return cls._registry.get(strategy_id, {}).pop(main_order_id, None)
 
     @classmethod
-    async def list_trades_for_strategy(cls, strategy_id: str) -> List[TradeData]:
-        async with cls._lock:
-            return list(cls._registry.get(strategy_id, {}).values())
-
-    @classmethod
-    async def list_all_trades(cls) -> List[TradeData]:
-        async with cls._lock:
-            trades = []
-            for strategy_trades in cls._registry.values():
-                trades.extend(strategy_trades.values())
-            return trades
-
-    @classmethod
     async def update_trailing_history(cls, strategy_id: str, order_id: str, new_hist: dict):
         async with cls._lock:
             trade = cls._registry.get(strategy_id, {}).get(order_id)
