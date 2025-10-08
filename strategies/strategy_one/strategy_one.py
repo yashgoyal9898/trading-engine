@@ -2,15 +2,16 @@
 import asyncio
 from typing import Optional
 from data_model.data_model import TradeData
+from strategies.strategy_interface import BaseStrategy
 from strategies.strategy_one.logic_manager import StrategyLogicManager
 from strategies.strategy_one.trailling_manager import TrailingManager
-from utils.logger import logger
 from order_active_state_manager.order_state_manager import TradeManager
 from order_placement_manager.fyers_order_placement import FyersOrderPlacement
 from utils.error_handling import error_handling
+from utils.logger import logger
 
 @error_handling 
-class StrategyOne:
+class StrategyOne(BaseStrategy):
     def __init__(self, event_bus, strategy_id, ws_mgr, loop, max_trades=1):
         self.event_bus = event_bus
         self.strategy_id = strategy_id
