@@ -1,9 +1,9 @@
 from datetime import datetime
 from collections import deque
-from centeral_hub.event_bus import EventBus
 
 class TickProcessor:
-    def __init__(self, max_ticks=1000, symbol_ttl=3600):
+    def __init__(self, event_bus, max_ticks=1000, symbol_ttl=3600):
+        self.event_bus = event_bus
         self.tick_buffer = {}
         self.last_tick_time = {}
         self.max_ticks = max_ticks
@@ -27,7 +27,7 @@ class TickProcessor:
         self.last_tick_time[symbol] = ts
         
         if publish:
-            await EventBus.publish("tick", (symbol, tick))
+            await self.event_bus.publish("tick", (symbol, tick))
             
         return True
     

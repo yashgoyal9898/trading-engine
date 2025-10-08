@@ -9,19 +9,14 @@ from centeral_hub.event_bus import EventBus
 
 @error_handling
 class FyersWSManager(BaseWSManager):
-    def __init__(
-        self, 
-        data_broker: BrokerInterface,
-        order_broker: BrokerInterface = None,
-        tick_processor=None, 
-        candle_builder=None
-    ):
+    def __init__( self, event_bus: EventBus, data_broker: BrokerInterface, order_broker: BrokerInterface = None, tick_processor=None, candle_builder=None ):
         self.data_broker = data_broker
         self.order_broker = order_broker
+        self.event_bus = event_bus
         self.symbols = {}
         self._running = False
-        self.tick_processor = tick_processor or TickProcessor()
-        self.candle_builder = candle_builder or CandleBuilder(self.tick_processor)
+        self.tick_processor = tick_processor or TickProcessor(event_bus=event_bus)
+        self.candle_builder = candle_builder or CandleBuilder(self.tick_processor, event_bus)
         self.tick_queue = asyncio.Queue()
         self.log = logger
 
@@ -85,4 +80,4 @@ class FyersWSManager(BaseWSManager):
                         await self.candle_builder.process_candle_tick(symbol, message, cfg["timeframe"])
 
             elif msg_type == "positions":
-                await EventBus.publish("fyers_position_update", message)
+                await self.event_bus.publish("fyers_position_update", message)

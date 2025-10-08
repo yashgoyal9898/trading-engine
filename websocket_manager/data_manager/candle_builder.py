@@ -1,7 +1,5 @@
 import asyncio
 from datetime import datetime, timedelta
-from utils.logger import logger
-from centeral_hub.event_bus import EventBus
 
 def align_to_candle_boundary(dt, tf):
     session_start = dt.replace(hour=9, minute=15, second=0, microsecond=0)
@@ -14,8 +12,9 @@ def get_candle_end_time(start, tf):
     return start + timedelta(seconds=tf)
 
 class CandleBuilder:
-    def __init__(self, tick_processor):
+    def __init__(self, tick_processor, event_bus):
         self.tick_processor = tick_processor
+        self.event_bus = event_bus  # store the EventBus instance
         self.active, self.last_close = {}, {}
         self.completion_tasks = {}  # Track scheduled completions
 
@@ -61,7 +60,6 @@ class CandleBuilder:
                 del self.active[symbol]
 
     async def _complete_candle(self, symbol, tf):
-        # Your existing completion logic remains the same
         c = self.active.get(symbol)
         if not c:
             return
@@ -87,5 +85,7 @@ class CandleBuilder:
             "time": c["start_time"].strftime("%Y-%m-%d %H:%M:%S"),
         }
         self.last_close[symbol] = candle["close"]
-        await EventBus.publish("candle", (symbol, candle))
+
+        # Use the passed EventBus instance
+        await self.event_bus.publish("candle", (symbol, candle))
         self.tick_processor.cleanup_old_ticks(symbol, end.timestamp())

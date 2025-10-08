@@ -13,7 +13,8 @@ from utils.error_handling import error_handling
 
 @error_handling 
 class StrategyOne:
-    def __init__(self, strategy_id, ws_mgr, loop, max_trades=1):
+    def __init__(self, event_bus, strategy_id, ws_mgr, loop, max_trades=1):
+        self.event_bus = event_bus
         self.strategy_id = strategy_id
         self.ws_mgr = ws_mgr
         self.loop = loop
@@ -25,9 +26,9 @@ class StrategyOne:
         self.fyers_order_placement = FyersOrderPlacement()
         self.trailling_manager = TrailingManager()
 
-        self.candle_queue = EventBus.subscribe("candle")
-        self.tick_queue = EventBus.subscribe("tick")
-        self.trade_close_queue = EventBus.subscribe("fyers_position_update")
+        self.candle_queue = self.event_bus.subscribe("candle")
+        self.tick_queue = self.event_bus.subscribe("tick")
+        self.trade_close_queue = self.event_bus.subscribe("fyers_position_update")
 
         self.trades_done = 0
         self.active_order_id = None

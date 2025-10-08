@@ -6,6 +6,7 @@ from strategies.strategy_one.strategy_one import StrategyOne
 from utils.logger import logger
 from utils.error_handling import error_handling
 import os
+from centeral_hub.event_bus import EventBus
 
 @error_handling
 async def main():
@@ -16,9 +17,9 @@ async def main():
     # Initialize both brokers using same interface
     data_socket = FyersDataBroker()
     position_order_socket = FyersOrderPositionTracker()
-    ws_mgr = FyersWSManager(data_broker=data_socket, order_broker=position_order_socket)
+    event_bus = EventBus()
+    ws_mgr = FyersWSManager(event_bus=event_bus, data_broker=data_socket, order_broker=position_order_socket)
     
-    # Start all connections
     await ws_mgr.start()
     
     # Subscribe symbols
@@ -26,7 +27,7 @@ async def main():
     logger.info("ALL RESOURCES SUBSCRIBED")
     
     # Run strategy
-    strategy = StrategyOne("strategy_one", ws_mgr, loop, max_trades=1)
+    strategy = StrategyOne(event_bus, "strategy_one", ws_mgr, loop, max_trades=1)
     await strategy.run()
     
     # Stop all connections
