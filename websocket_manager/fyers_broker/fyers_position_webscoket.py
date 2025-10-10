@@ -4,12 +4,12 @@ from utils.error_handling import error_handling
 from utils.logger import logger
 from dotenv import load_dotenv
 import os
-from .broker_interface import BrokerInterface
+from .ibroker import IBroker
 
 load_dotenv()
 
 @error_handling
-class FyersOrderPositionTracker(BrokerInterface):
+class FyersOrderPositionTracker(IBroker):
 
     def __init__(self, access_token=None):
         client_id = os.getenv("CLIENT_ID")

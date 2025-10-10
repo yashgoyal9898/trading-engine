@@ -3,13 +3,13 @@ from utils.logger import logger
 from utils.error_handling import error_handling
 from .tick_processor import TickProcessor
 from .candle_builder import CandleBuilder
-from websocket_manager.fyers_broker.broker_interface import BrokerInterface
+from websocket_manager.fyers_broker.ibroker import IBroker
 from .base_interface import BaseWSManager
 from centeral_hub.event_bus import EventBus
 
 @error_handling
 class FyersWSManager(BaseWSManager):
-    def __init__( self, event_bus: EventBus, data_broker: BrokerInterface, order_broker: BrokerInterface = None, tick_processor=None, candle_builder=None ):
+    def __init__( self, event_bus: EventBus, data_broker: IBroker, order_broker: IBroker = None, tick_processor=None, candle_builder=None ):
         self.data_broker = data_broker
         self.order_broker = order_broker
         self.event_bus = event_bus
@@ -18,7 +18,6 @@ class FyersWSManager(BaseWSManager):
         self.tick_processor = tick_processor or TickProcessor(event_bus=event_bus)
         self.candle_builder = candle_builder or CandleBuilder(self.tick_processor, event_bus)
         self.tick_queue = asyncio.Queue()
-        self.log = logger
 
     async def start(self):
         if self._running:
@@ -44,7 +43,7 @@ class FyersWSManager(BaseWSManager):
         await self.data_broker.disconnect()
         await self.order_broker.disconnect()
         
-        self.log.info("[Manager] Stopped all websockets")
+        logger.info("[Manager] Stopped all websockets")
     
     def subscribe_symbol(self, symbol, mode="candle", timeframe=30):
         if symbol not in self.symbols:

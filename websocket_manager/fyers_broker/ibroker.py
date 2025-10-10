@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import asyncio
 
-class BrokerInterface(ABC):
+class IBroker(ABC):
     
     @abstractmethod
     async def connect(self, queue: asyncio.Queue):

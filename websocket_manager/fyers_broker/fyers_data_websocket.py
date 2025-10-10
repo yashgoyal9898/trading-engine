@@ -6,12 +6,12 @@ from dotenv import load_dotenv
 from fyers_apiv3.FyersWebsocket import data_ws
 from utils.logger import logger
 from utils.error_handling import error_handling
-from .broker_interface import BrokerInterface
+from .ibroker import IBroker
 
 load_dotenv()
 
 @error_handling
-class FyersDataBroker(BrokerInterface):
+class FyersDataBroker(IBroker):
     def __init__(self, access_token=None):
         self._token = access_token or os.getenv("FYERS_ACCESS_TOKEN")
         if not self._token:
