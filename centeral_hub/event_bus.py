@@ -1,23 +1,20 @@
 import asyncio
-from typing import Callable, Any, Dict, List, Tuple
+from collections import defaultdict
+from collections.abc import Callable
+from typing import Any
 
 class EventBus:
+    __slots__ = ('_subscribers',)
+    
     def __init__(self):
-        self._subscribers: Dict[str, List[Tuple[asyncio.Queue, Callable[[Any], bool]]]] = {}
+        self._subscribers: dict[str, list[tuple[asyncio.Queue, Callable[[Any], bool] | None]]] = defaultdict(list)
 
-    def subscribe( self, event_type: str, filter_fn: Callable[[Any], bool] = None, maxsize: int = 1000 ) -> asyncio.Queue:
-        q = asyncio.Queue(maxsize=maxsize)
-        self._subscribers.setdefault(event_type, []).append((q, filter_fn))
+    def subscribe(self, event_type: str, filter_fn: Callable[[Any], bool] | None = None, maxsize: int = 1000) -> asyncio.Queue:
+        q = asyncio.Queue(maxsize)
+        self._subscribers[event_type].append((q, filter_fn))
         return q
 
     async def publish(self, event_type: str, data: Any) -> None:
-        subscribers = self._subscribers.get(event_type, [])
-        if not subscribers:
-            return
-
-        for q, filter_fn in subscribers:
-            if filter_fn is None or filter_fn(data):
-                q.put_nowait(data)
-                await q.get()
-                q.put_nowait(data)
-                    
+        tasks = [q.put(data) for q, f in self._subscribers.get(event_type, []) if not f or f(data)]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)

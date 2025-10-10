@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Optional
 import aiofiles
 import logging
-import orjson
 import os
 
 class LoggerManager:
@@ -29,8 +28,8 @@ class LoggerManager:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._worker_task: Optional[asyncio.Task] = None
 
-        # Formatter for terminal output
-        self._console_formatter = logging.Formatter(
+        # Formatter for terminal and file output
+        self._formatter = logging.Formatter(
             '%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
@@ -48,22 +47,13 @@ class LoggerManager:
                 if record is None:  # Sentinel to stop
                     break
 
-                # JSON log entry for file
-                log_entry = {
-                    "timestamp": datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-                    "level": record.levelname,
-                    "message": record.getMessage(),
-                    "module": record.module,
-                    "funcName": record.funcName,
-                    "line": record.lineno,
-                }
-
-                json_line = orjson.dumps(log_entry).decode("utf-8") + "\n"
-                await f.write(json_line)
+                # Simple text log line
+                log_line = self._formatter.format(record) + "\n"
+                await f.write(log_line)
                 await f.flush()
 
-                # Terminal output (human-readable)
-                print(self._console_formatter.format(record))
+                # Terminal output
+                print(log_line, end='')
 
                 self._queue.task_done()
 
