@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 
 @dataclass(slots=True)
 class TradeData:
@@ -19,3 +20,11 @@ class TradeData:
     target_points: Optional[float]
     trailing_levels: List[Dict[str, Any]]
     trailing_history: List[Dict[str, Any]]
+
+@dataclass(slots=True)
+class Tick:
+    symbol: str
+    ltp: float
+    timestamp: float
+    datetime: datetime
+    volume: int = 0

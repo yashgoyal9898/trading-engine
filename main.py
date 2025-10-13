@@ -37,7 +37,7 @@ async def main():
     logger.info("ALL RESOURCES SUBSCRIBED")
     
     # Run strategy
-    strategy = StrategyOne(event_bus, "strategy_one", ws_mgr, loop, max_trades=2)
+    strategy = StrategyOne(event_bus, "strategy_one", ws_mgr, loop, max_trades=1)
     await strategy.run()
     
     # ws_mgr.unsubscribe_symbol("NSE:NIFTY50-INDEX")

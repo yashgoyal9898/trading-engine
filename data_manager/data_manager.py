@@ -2,6 +2,8 @@ import asyncio
 from utils.logger import logger
 from utils.error_handling import error_handling
 from .tick_processor import TickProcessor
+from data_model.data_model import Tick
+from datetime import datetime
 from .candle_builder import CandleBuilder
 from broker.fyers_broker.ibroker import IBroker
 from .idata_manager import IDataManager
@@ -68,15 +70,26 @@ class DataManager(IDataManager):
 
             if msg_type == "broker_raw_ticks":
                 symbol = message.get("symbol")
+                ts = message.get("exch_feed_time")
+                volume = message.get("volume", 0)
+
                 if not symbol or symbol not in self.symbols:
                     continue
                 cfg = self.symbols[symbol]
 
+                tick = Tick(
+                    symbol=symbol,
+                    ltp=message.get('ltp'),
+                    timestamp=ts,
+                    datetime=datetime.fromtimestamp(ts),
+                    volume=volume
+                )
+                
                 if cfg["mode"] == "tick":
-                    await self.tick_processor.process_tick(symbol, message, publish=True)
+                    await self.tick_processor.process_tick(tick, publish=True)
                 else:
-                    if await self.tick_processor.process_tick(symbol, message, publish=False):
-                        await self.candle_builder.process_candle_tick(symbol, message, cfg["timeframe"])
+                    if await self.tick_processor.process_tick(tick, publish=False):
+                        await self.candle_builder.process_candle_tick(tick, cfg["timeframe"])
 
             elif msg_type == "positions":
                 await self.event_bus.publish("fyers_position_update", message)

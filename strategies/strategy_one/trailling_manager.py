@@ -1,14 +1,15 @@
 from utils.logger import logger
 from utils.error_handling import error_handling
 from data_model.data_model import TradeData
+from data_model.data_model import Tick
 
 @error_handling
 class TrailingManager:
-    async def start_trailing_sl(fyers_order_placement, trade_data: TradeData, tick: dict):
+    async def start_trailing_sl(fyers_order_placement, trade_data: TradeData, tick: Tick):
         if not trade_data or not tick:
             return
 
-        tick_ltp = tick.get("ltp")
+        tick_ltp = tick.ltp
         if tick_ltp is None:
             return
 

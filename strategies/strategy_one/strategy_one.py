@@ -67,11 +67,11 @@ class StrategyOne(BaseStrategy):
         logger.info("skipped candle")
 
         while True:
-            symbol, candle = await self.candle_queue.get()
+            candle = await self.candle_queue.get()
             if self.active_order_id is None:
                 if await self.is_max_trade_reached():
                     break  
-                condition_met = await self.strategy_logic_manager.check_entry_condition(self.strategy_id, symbol, candle)
+                condition_met = await self.strategy_logic_manager.check_entry_condition(self.strategy_id, candle.symbol, candle)
                 if condition_met:
                     logger.info("before")
                     order_response = await self.fyers_order_placement.place_order(symbol="NSE:IDEA-EQ", qty=1, order_type=2, side=1, stop_loss=0.5, take_profit=2.0)
@@ -83,7 +83,7 @@ class StrategyOne(BaseStrategy):
 
     async def tick_consumer(self):
         while True:
-            _, tick = await self.tick_queue.get()
+            tick = await self.tick_queue.get()
             if self.active_trade_data_obj:
                 await TrailingManager.start_trailing_sl(
                     self.fyers_order_placement,

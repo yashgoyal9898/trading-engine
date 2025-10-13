@@ -1,18 +1,19 @@
 from utils.logger import logger
 from strategies.strategy_one.option_helper import OptionHelper
 from utils.error_handling import error_handling
+from data_manager.candle_builder import Candle
 
 @error_handling
 class StrategyLogicManager:
     def __init__(self):
         pass
 
-    async def check_entry_condition(self, strategy_id, symbol: str, candle: dict):
-        o, h, l, c = candle["open"], candle["high"], candle["low"], candle["close"]
+    async def check_entry_condition(self, strategy_id, symbol: str, candle: Candle):
+        o, h, l, c = candle.open, candle.high, candle.low, candle.close
 
-        ce_symbol, pe_symbol = await OptionHelper.find_strike_price_atm(candle["close"])
+        ce_symbol, pe_symbol = await OptionHelper.find_strike_price_atm(candle.close)
         
-        logger.info( f"[Candle] {candle['time']} | {symbol} | " f"open: {o}, high: {h}, low: {l}, close: {c}" )
+        logger.info( f"[Candle] {candle.start_time} | {symbol} | " f"open: {o}, high: {h}, low: {l}, close: {c}" )
 
         if h == l:
             return False

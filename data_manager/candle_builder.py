@@ -1,6 +1,9 @@
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Dict, Optional
+from .tick_processor import TickProcessor
+from data_model.data_model import Tick
 
 def align_to_candle_boundary(dt: datetime, tf: int) -> Optional[datetime]:
     session_start = dt.replace(hour=9, minute=15, second=0, microsecond=0)
@@ -9,34 +12,59 @@ def align_to_candle_boundary(dt: datetime, tf: int) -> Optional[datetime]:
     secs = (dt - session_start).total_seconds()
     return session_start + timedelta(seconds=int(secs // tf) * tf)
 
+@dataclass(slots=True)
+class Candle:
+    symbol: str
+    open: float
+    high: float
+    low: float
+    close: float
+    start_time: datetime
+    volume: int = 0
+
+    def update(self, ltp: float, volume: int = 0) -> None:
+        self.high = max(self.high, ltp)
+        self.low = min(self.low, ltp)
+        self.close = ltp
+        self.volume += volume
+
 class CandleBuilder:
     __slots__ = ('tick_processor', 'event_bus', 'active', 'last_close', 'completion_tasks')
-    
-    def __init__(self, tick_processor, event_bus):
+
+    def __init__(self, tick_processor: TickProcessor, event_bus):
         self.tick_processor = tick_processor
         self.event_bus = event_bus
-        self.active: dict[str, dict] = {}
-        self.last_close: dict[str, float] = {}
-        self.completion_tasks: dict[str, asyncio.Task] = {}
+        self.active: Dict[str, Candle] = {}
+        self.last_close: Dict[str, float] = {}
+        self.completion_tasks: Dict[str, asyncio.Task] = {}
 
-    async def process_candle_tick(self, symbol: str, msg: dict, tf: int) -> None:
-        if not (ltp := msg.get("ltp")) or not msg.get("exch_feed_time"):
-            return
-        
-        if not (start := align_to_candle_boundary(datetime.now(), tf)):
+    async def process_candle_tick(self, tick: Tick, tf: int) -> None:
+        if not tick or tick.ltp is None:
             return
 
-        if symbol not in self.active or self.active[symbol]["start_time"] != start:
+        symbol = tick.symbol
+        now = datetime.now()
+        start = align_to_candle_boundary(now, tf)
+        if not start:
+            return
+
+        # Start new candle if window rolled over
+        if symbol not in self.active or self.active[symbol].start_time != start:
             if symbol in self.active:
                 await self._complete_candle(symbol, tf)
-            
-            self.active[symbol] = {
-                "open": ltp, "high": ltp, "low": ltp, "close": ltp,
-                "start_time": start, "volume": 0
-            }
-            
+
+            self.active[symbol] = Candle(
+                symbol=symbol,
+                open=tick.ltp,
+                high=tick.ltp,
+                low=tick.ltp,
+                close=tick.ltp,
+                start_time=start,
+                volume=tick.volume or 0,
+            )
+
             # Schedule candle completion
-            delay = (start + timedelta(seconds=tf) - datetime.now()).total_seconds()
+            delay = (start + timedelta(seconds=tf) - now).total_seconds()
             if delay > 0:
                 if task := self.completion_tasks.get(symbol):
                     task.cancel()
@@ -44,10 +72,7 @@ class CandleBuilder:
                     self._scheduled_complete(symbol, tf, delay)
                 )
         else:
-            c = self.active[symbol]
-            c["high"] = max(c["high"], ltp)
-            c["low"] = min(c["low"], ltp)
-            c["close"] = ltp
+            self.active[symbol].update(tick.ltp, tick.volume or 0)
 
     async def _scheduled_complete(self, symbol: str, tf: int, delay: float) -> None:
         try:
@@ -59,30 +84,27 @@ class CandleBuilder:
             pass
 
     async def _complete_candle(self, symbol: str, tf: int) -> None:
-        if not (c := self.active.get(symbol)):
+        if not (candle := self.active.get(symbol)):
             return
-        
-        start, end = c["start_time"], c["start_time"] + timedelta(seconds=tf)
+
+        start = candle.start_time
+        end = start + timedelta(seconds=tf)
         ticks = self.tick_processor.get_ticks_in_range(symbol, start.timestamp(), end.timestamp())
 
         if ticks:
-            prices = [t["ltp"] for t in ticks]
-            c.update({
-                "open": ticks[0]["ltp"],
-                "high": max(prices),
-                "low": min(prices),
-                "close": ticks[-1]["ltp"],
-                "volume": sum(t.get("volume", 0) for t in ticks)
-            })
-        elif price := self.last_close.get(symbol):
-            c.update({"open": price, "high": price, "low": price, "close": price})
+            prices = [t.ltp for t in ticks]
+            candle.open = ticks[0].ltp
+            candle.high = max(prices)
+            candle.low = min(prices)
+            candle.close = ticks[-1].ltp
+            candle.volume = sum(t.volume for t in ticks)
+        elif (last := self.last_close.get(symbol)) is not None:
+            candle.open = candle.high = candle.low = candle.close = last
 
-        candle = {
-            "open": c["open"], "high": c["high"], "low": c["low"], "close": c["close"],
-            "volume": c.get("volume", 0),
-            "time": c["start_time"].strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        self.last_close[symbol] = candle["close"]
+        self.last_close[symbol] = candle.close
 
-        await self.event_bus.publish("candle", (symbol, candle))
+        # Publish Candle dataclass directly
+        await self.event_bus.publish("candle", candle)
+
+        # Cleanup old ticks
         self.tick_processor.cleanup_old_ticks(symbol, end.timestamp())
