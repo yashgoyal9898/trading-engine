@@ -19,7 +19,6 @@ class TradeData:
     initial_sl_points: Optional[float]
     target_points: Optional[float]
     trailing_levels: List[Dict[str, Any]]
-    trailing_history: List[Dict[str, Any]]
 
 @dataclass(slots=True)
 class Tick:

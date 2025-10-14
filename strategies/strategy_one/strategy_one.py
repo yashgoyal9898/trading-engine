@@ -1,6 +1,5 @@
 # strategy/strategy_one.py
 import asyncio
-from typing import Optional
 from data_model.data_model import TradeData
 from strategies.strategy_interface import BaseStrategy
 from strategies.strategy_one.logic_manager import StrategyLogicManager
@@ -30,7 +29,7 @@ class StrategyOne(BaseStrategy):
 
         self.trades_done = 0
         self.active_order_id = None
-        self.active_trade_data_obj: Optional[TradeData] = None
+        self.active_trade_data_obj: TradeData = None
 
     # ------------------ Max Trade Check ------------------
     async def is_max_trade_reached(self):
@@ -53,9 +52,8 @@ class StrategyOne(BaseStrategy):
             await self.order_state_manager.close_trade(self.active_order_id)
             logger.info(f"[{self.strategy_id}] | Trade {self.trades_done} closed | PNL: {realized}")
             self.active_order_id = None
-            self.active_trade_data_obj: Optional[TradeData] = None
+            self.active_trade_data_obj: TradeData = None
         elif self.active_order_id: #--- TRADE OPEN -----  
-            self.ws_mgr.subscribe_symbol("NSE:NIFTY25OCT24800CE", mode="tick")
             logger.info(f"[{self.strategy_id}] Position OPEN: {active_symbol}, Qty: {net_qty}")
 
 
@@ -63,8 +61,9 @@ class StrategyOne(BaseStrategy):
         self.trades_done += 1
         logger.info(f"[{self.strategy_id}] Order placed with ID: {active_order_id}")
         main, stop, target = await self.fyers_order_placement.get_main_stop_target_orders(active_order_id)
+        self.ws_mgr.subscribe_symbol("NSE:NIFTY25OCT24800CE", mode="tick")
         active_trade_data_obj = await self.order_state_manager.add_trade(self.trades_done, self.active_order_id, main, stop, target)
-        self.active_trade_data_obj: Optional[TradeData] = active_trade_data_obj
+        self.active_trade_data_obj: TradeData = active_trade_data_obj
 
     # ------------------ Consumers ------------------
     async def candle_consumer(self):
@@ -87,12 +86,16 @@ class StrategyOne(BaseStrategy):
     async def tick_consumer(self):
         while True:
             tick = await self.tick_queue.get()
-            if self.active_trade_data_obj:
+            if self.active_trade_data_obj.trailing_levels != []:
                 await TrailingManager.start_trailing_sl(
                     self.fyers_order_placement,
-                    self.active_trade_data_obj,
+                    self.active_trade_data_obj.trailing_levels,
+                    self.active_trade_data_obj.stop_order_id, 
+                    self.active_trade_data_obj.qty,
                     tick
                 )  
+            else:
+                logger.info("Trailling levels was blank")
 
     async def broker_postion_consumer(self):
         while True:

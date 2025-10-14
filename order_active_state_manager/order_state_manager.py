@@ -20,7 +20,7 @@ class TradeManager:
             target_order_id=target.get("id") if target else None,
             symbol=main.get("symbol"),
             position_id=None,
-            qty=1,
+            qty=main.get("qty"),
             side="BUY" if target and main.get("tradedPrice") < target.get("limitPrice", float('inf')) else "SELL",
             entry_price=main.get("tradedPrice"),
             initial_stop_price=stop.get("stopPrice") if stop else None,
@@ -28,10 +28,9 @@ class TradeManager:
             initial_sl_points=(stop.get("stopPrice") - main.get("tradedPrice")) if stop else None,
             target_points=(target.get("limitPrice") - main.get("tradedPrice")) if target else None,
             trailing_levels=[
-                {"threshold": main.get("tradedPrice") + 3, "new_stop": main.get("tradedPrice") + 0.1, "msg": "breakeven"},
-                {"threshold": main.get("tradedPrice") + 10, "new_stop": main.get("tradedPrice") + 0.2, "msg": "1st trail locked profit"},
+                {"threshold": main.get("tradedPrice") + 3, "new_stop": main.get("tradedPrice") + 0.1, "msg": "breakeven", "hit": False},
+                {"threshold": main.get("tradedPrice") + 10, "new_stop": main.get("tradedPrice") + 0.2, "msg": "1st trail locked profit", "hit": False},
             ] if main.get("tradedPrice") else [],
-            trailing_history=[]
         )
 
         async with self._lock:
