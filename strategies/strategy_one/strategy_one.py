@@ -94,17 +94,18 @@ class StrategyOne(BaseStrategy):
     async def tick_consumer(self):
         while True:
             tick = await self.tick_queue.get()
-            if self.active_trade_data_obj:
-                if self.active_trade_data_obj and self.active_trade_data_obj.trailing_levels:
-                    await self.trailing_manager.start_trailing_sl(
-                        self.fyers_order_placement,
-                        self.active_trade_data_obj.trailing_levels,
-                        self.active_trade_data_obj.stop_order_id, 
-                        self.active_trade_data_obj.qty,
-                        tick
-                    )  
-                else:
-                    logger.info("Trailing levels are blank or no active trade")
+            trade = self.active_trade_data_obj
+            if trade and trade.trailing_levels:
+                await self.trailing_manager.start_trailing_sl(
+                    self.fyers_order_placement,
+                    trade.trailing_levels,
+                    trade.stop_order_id, 
+                    trade.qty,
+                    tick
+                )
+            else:
+                logger.info("No active trade or trailing levels blank")
+
 
     async def broker_postion_consumer(self):
         while True:
