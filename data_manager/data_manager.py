@@ -64,17 +64,24 @@ class DataManager(IDataManager):
 
             match raw_data.get("type"):
                 case "raw_tick_data":
-                    message = raw_data["data"]
-                    if not (symbol := message.get("symbol")) or symbol not in self.symbols:
+                    tick_data = raw_data["data"]
+                    
+                    symbol = tick_data.get("symbol")
+                    tick_ltp = tick_data.get("ltp")
+                    tick_exch_feed_time = tick_data.get("exch_feed_time")
+                    tick_vol = tick_data.get("volume", 0)
+
+                    if symbol not in self.symbols:
                         continue
                     
                     cfg = self.symbols[symbol]
+                    
                     tick = Tick(
                         symbol=symbol,
-                        ltp=message.get('ltp'),
-                        timestamp=(ts := message.get("exch_feed_time")),
+                        ltp=tick_ltp,
+                        timestamp=(ts := tick_exch_feed_time),
                         datetime=datetime.fromtimestamp(ts),
-                        volume=message.get("volume", 0)
+                        volume=tick_vol
                     )
                     
                     if cfg["mode"] == "tick":
