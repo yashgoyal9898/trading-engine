@@ -53,7 +53,7 @@ class FyersOrderPositionTracker(IBroker):
         positions_list = positions if isinstance(positions, list) else [positions]
         for pos in positions_list:
             if self._queue and self._loop:
-                asyncio.run_coroutine_threadsafe(self._queue.put({"type": "positions", "data": pos}), self._loop)
+                asyncio.run_coroutine_threadsafe(self._queue.put({"type": "positions_data", "data": pos}), self._loop)
 
     async def connect(self, queue: asyncio.Queue = None):
         self._queue = queue

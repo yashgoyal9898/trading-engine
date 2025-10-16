@@ -63,7 +63,7 @@ class DataManager(IDataManager):
                 continue
 
             match raw_data.get("type"):
-                case "broker_raw_ticks":
+                case "raw_tick_data":
                     message = raw_data["data"]
                     if not (symbol := message.get("symbol")) or symbol not in self.symbols:
                         continue
@@ -82,6 +82,6 @@ class DataManager(IDataManager):
                     elif cfg["mode"] == "candle": 
                         await self.candle_builder.process_candle_tick(tick, cfg["timeframe"])
                 
-                case "positions":
+                case "positions_data":
                     await self.event_bus.publish("fyers_position_update", raw_data["data"])
 
