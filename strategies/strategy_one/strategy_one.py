@@ -91,7 +91,7 @@ class StrategyOne():
                         
                         logger.info(f"Order Placed {order_response.get("id")}")
                     else:
-                        logger.info("Order is Not Placed")
+                        logger.info(f"Order Placing FAILED {order_response}")
 
     async def tick_consumer(self):
         while True:
