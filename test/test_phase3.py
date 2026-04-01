@@ -1,5 +1,6 @@
+# test/test_phase3.py
 """
-Run: pytest tests/test_phase3.py -v
+Run: pytest test/test_phase3.py -v
 """
 from datetime import datetime
 import asyncio
@@ -13,22 +14,25 @@ from src.managers.symbol_manager import SymbolManager
 from src.managers.trade_state_manager import TradeStateManager
 from src.managers.order_placement_manager import OrderPlacementManager
 
+SYMBOL = "NSE:NIFTY50-INDEX"
+TF = 1800  # 30 minutes in seconds — BUG FIX: was 30 (= 30 seconds, not 30 min)
 
-# ------------------------------------------------------------------ #
-#  CandleBuilder
-# ------------------------------------------------------------------ #
 
 def make_tick(ltp: float, hour: int, minute: int) -> Tick:
     return Tick(
-        symbol="NSE:NIFTY50-INDEX",
+        symbol=SYMBOL,
         ltp=ltp,
         timestamp=datetime(2024, 1, 1, hour, minute, 0),
         volume=100,
     )
 
 
+# ------------------------------------------------------------------ #
+#  CandleBuilder
+# ------------------------------------------------------------------ #
+
 def test_candle_builder_first_tick():
-    builder = TimeframeCandleBuilder("NSE:NIFTY50-INDEX", 30)
+    builder = TimeframeCandleBuilder(SYMBOL, TF)
     closed = builder.update(make_tick(22000.0, 9, 15))
     assert closed is None  # no previous bar to close
     cur = builder.get_current()
@@ -37,11 +41,15 @@ def test_candle_builder_first_tick():
 
 
 def test_candle_builder_closes_bar():
-    builder = TimeframeCandleBuilder("NSE:NIFTY50-INDEX", 30)
-    builder.update(make_tick(22000.0, 9, 15))
-    builder.update(make_tick(22200.0, 9, 20))
-    builder.update(make_tick(21900.0, 9, 25))
-    # New bar
+    """
+    Ticks at 9:15, 9:20, 9:25 are in the same 30-min bar (9:00–9:30).
+    Tick at 9:45 is in the next bar (9:30–10:00) → closes 9:00 bar.
+    """
+    builder = TimeframeCandleBuilder(SYMBOL, TF)
+    builder.update(make_tick(22000.0, 9, 15))   # bar opens at 9:00
+    builder.update(make_tick(22200.0, 9, 20))   # same bar — high updated
+    builder.update(make_tick(21900.0, 9, 25))   # same bar — low updated
+    # 9:45 is in next bar → closes the 9:00 bar
     closed = builder.update(make_tick(22100.0, 9, 45))
     assert closed is not None
     assert closed.is_closed is True
@@ -50,16 +58,20 @@ def test_candle_builder_closes_bar():
 
 
 def test_candle_manager_fires_callback():
+    """
+    3 ticks: 9:15 and 9:20 in same 30-min bar, 9:45 in next bar.
+    Only ONE closed candle should fire.
+    """
     received = []
     cm = CandleManager()
-    cm.register("NSE:NIFTY50-INDEX", 30, lambda c: received.append(c))
+    cm.register(SYMBOL, TF, lambda c: received.append(c))
 
-    cm.on_tick(make_tick(22000.0, 9, 15))
-    cm.on_tick(make_tick(22100.0, 9, 20))
-    cm.on_tick(make_tick(22050.0, 9, 45))  # triggers close of 9:15 bar
+    cm.on_tick(make_tick(22000.0, 9, 15))   # opens bar
+    cm.on_tick(make_tick(22100.0, 9, 20))   # same bar
+    cm.on_tick(make_tick(22050.0, 9, 45))   # new bar → closes 9:15 bar
 
     assert len(received) == 1
-    assert received[0].symbol == "NSE:NIFTY50-INDEX"
+    assert received[0].symbol == SYMBOL
     assert received[0].is_closed is True
 
 
@@ -71,7 +83,7 @@ def make_trade(strategy_id="S1") -> TradeData:
     return TradeData(
         trade_id="",
         strategy_id=strategy_id,
-        symbol="NSE:NIFTY50-INDEX",
+        symbol=SYMBOL,
         side=OrderSide.BUY,
         quantity=50,
         entry_price=22000.0,
@@ -120,7 +132,7 @@ class MockOrderBroker:
 async def test_order_placement_creates_trade():
     tsm = TradeStateManager()
     opm = OrderPlacementManager(MockOrderBroker(), tsm)
-    sig = Signal("NSE:NIFTY50-INDEX", OrderSide.BUY, OrderType.MARKET, 50)
+    sig = Signal(SYMBOL, OrderSide.BUY, OrderType.MARKET, 50)
 
     trade = await opm.place(sig, strategy_id="S1")
     assert trade.status == TradeStatus.OPEN
@@ -131,7 +143,7 @@ async def test_order_placement_creates_trade():
 async def test_order_placement_tracks_count():
     tsm = TradeStateManager()
     opm = OrderPlacementManager(MockOrderBroker(), tsm)
-    sig = Signal("NSE:NIFTY50-INDEX", OrderSide.BUY, OrderType.MARKET, 50)
+    sig = Signal(SYMBOL, OrderSide.BUY, OrderType.MARKET, 50)
 
     await opm.place(sig, "S1")
     await opm.place(sig, "S1")

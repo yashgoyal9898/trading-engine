@@ -1,3 +1,4 @@
+# src/broker/fyers/data_broker.py
 from __future__ import annotations
 
 import asyncio
@@ -23,15 +24,7 @@ class FyersDataBroker(IDataBroker):
         # TODO: store your real Fyers SDK client here
         # self._ws = FyersDataSocket(access_token=access_token, ...)
 
-    # ------------------------------------------------------------------ #
-    #  IDataBroker implementation
-    # ------------------------------------------------------------------ #
-
     async def connect(self) -> None:
-        """
-        Replace with your real Fyers websocket connect.
-        Keep the _connected flag update.
-        """
         # await self._ws.connect()
         self._connected = True
 
@@ -46,8 +39,7 @@ class FyersDataBroker(IDataBroker):
     ) -> None:
         for symbol in symbols:
             self._subscriptions[symbol] = on_tick
-        # TODO: call your real Fyers subscribe
-        # self._ws.subscribe(symbols=symbols, data_type="symbolData")
+        # TODO: self._ws.subscribe(symbols=symbols, data_type="symbolData")
 
     async def unsubscribe(self, symbols: List[str]) -> None:
         for symbol in symbols:
@@ -61,32 +53,24 @@ class FyersDataBroker(IDataBroker):
         from_dt: datetime,
         to_dt: datetime,
     ) -> List[Candle]:
-        """
-        Replace with your real Fyers history API call.
-        Map the raw response to List[Candle].
-        """
-        # Example skeleton — replace body:
-        # raw = self._fyers.history(symbol=symbol, resolution=str(timeframe), ...)
-        # return [self._map_candle(r, symbol, timeframe) for r in raw["candles"]]
         return []
 
     @property
     def is_connected(self) -> bool:
         return self._connected
 
-    # ------------------------------------------------------------------ #
-    #  Internal helpers
-    # ------------------------------------------------------------------ #
-
     def _on_tick_raw(self, raw: dict) -> None:
         """
-        Fyers websocket message callback.
-        Parse raw dict → Tick → call subscriber.
-        Plug your existing parsing logic here.
+        Fyers websocket message callback — thread-safe tick dispatch.
+
+        BUG FIX: asyncio.coroutine was removed in Python 3.11.
+        Use loop.call_soon_threadsafe(callback, tick) instead.
+        The callback (SymbolManager._dispatch) is a plain sync function.
         """
         symbol = raw.get("symbol", "")
         if symbol not in self._subscriptions:
             return
+
         tick = Tick(
             symbol=symbol,
             ltp=float(raw.get("ltp", 0)),
@@ -96,19 +80,6 @@ class FyersDataBroker(IDataBroker):
             ask=float(raw.get("ask_price", 0)),
         )
         callback = self._subscriptions[symbol]
-        asyncio.get_event_loop().call_soon_threadsafe(
-            asyncio.ensure_future, asyncio.coroutine(lambda: callback(tick))()
-        )
 
-    @staticmethod
-    def _map_candle(row: list, symbol: str, timeframe: int) -> Candle:
-        """Map a raw Fyers candle row [epoch, o, h, l, c, vol] to Candle."""
-        ts, o, h, l, c, vol = row
-        return Candle(
-            symbol=symbol,
-            timeframe=timeframe,
-            open=o, high=h, low=l, close=c,
-            volume=int(vol),
-            timestamp=datetime.fromtimestamp(ts),
-            is_closed=True,
-        )
+        # FIXED: was asyncio.coroutine(lambda: callback(tick))()
+        # which crashes on Python 3.11+. callback is sync

@@ -1,3 +1,4 @@
+# src/strategies/base_strategy.py
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 class BaseStrategy(IStrategy):
     """
     Template Method pattern.
-    Subclasses implement: `entry_signal`, `exit_signal` (optional: `on_tick`).
+    Subclasses implement: entry_signal, exit_signal (optional: on_tick).
     BaseStrategy handles: max_trades guard, queue processing, lifecycle.
     """
 
@@ -27,10 +28,6 @@ class BaseStrategy(IStrategy):
         self._tsm: Optional[TradeStateManager] = None
         self._candle_manager: Optional[CandleManager] = None
         self._running = False
-
-    # ------------------------------------------------------------------ #
-    #  IStrategy — lifecycle
-    # ------------------------------------------------------------------ #
 
     @property
     def strategy_id(self) -> str:
@@ -44,25 +41,23 @@ class BaseStrategy(IStrategy):
         self._running = False
         logger.info("Strategy stopped: %s", self.strategy_id)
 
-    # ------------------------------------------------------------------ #
-    #  IStrategy — data callbacks
-    # ------------------------------------------------------------------ #
-
     async def on_candle(self, candle: Candle) -> None:
         if not self._running:
             return
 
         open_trades = self._tsm.get_open_trades(self.strategy_id)
 
-        # Check exit on open trades first
+        # BUG FIX: Old code had `if trade.symbol == candle.symbol` which
+        # ALWAYS failed because trade.symbol = NSE:IDEA-EQ (order symbol)
+        # but candle.symbol = NSE:NIFTY50-INDEX (signal symbol).
+        # SL/Target exit was silently broken. Fix: check ALL open trades.
         for trade in open_trades:
-            if trade.symbol == candle.symbol:
-                exit_sig = self.exit_signal(candle, trade)
-                if exit_sig and self._opm:
-                    await self._opm.exit_trade(trade.trade_id, exit_sig)
-                    return
+            exit_sig = self.exit_signal(candle, trade)
+            if exit_sig and self._opm:
+                await self._opm.exit_trade(trade.trade_id, exit_sig)
+                return
 
-        # Check entry if under max_trades
+        # Entry: only if under max_trades limit
         if self._tsm.open_trade_count(self.strategy_id) < self._config.max_trades:
             entry_sig = self.entry_signal(candle)
             if entry_sig and self._opm:
@@ -72,10 +67,6 @@ class BaseStrategy(IStrategy):
         """Override in subclass for tick-mode strategies."""
         pass
 
-    # ------------------------------------------------------------------ #
-    #  Template methods — subclasses MUST implement entry_signal
-    # ------------------------------------------------------------------ #
-
     def entry_signal(self, candle: Candle) -> Optional[Signal]:
         """Return a Signal to enter, or None to skip."""
         raise NotImplementedError
@@ -83,10 +74,6 @@ class BaseStrategy(IStrategy):
     def exit_signal(self, candle: Candle, trade) -> Optional[Signal]:
         """Return a Signal to exit, or None to hold."""
         return None
-
-    # ------------------------------------------------------------------ #
-    #  Wiring — called by engine before start()
-    # ------------------------------------------------------------------ #
 
     def wire(
         self,

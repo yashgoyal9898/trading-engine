@@ -1,5 +1,6 @@
+# test/test_phase1.py
 """
-Run: pytest tests/test_phase1.py -v
+Run: pytest test/test_phase1.py -v
 All should pass before moving to Phase 2.
 """
 from datetime import datetime
@@ -24,13 +25,13 @@ def test_enums_values():
 def test_tick_creation():
     t = Tick(symbol="NSE:NIFTY50-INDEX", ltp=22500.0, timestamp=datetime.now())
     assert t.symbol == "NSE:NIFTY50-INDEX"
-    assert t.volume == 0  # default
+    assert t.volume == 0
 
 
 def test_candle_valid():
     c = Candle(
         symbol="NSE:NIFTY50-INDEX",
-        timeframe=30,
+        timeframe=1800,
         open=22000.0, high=22500.0, low=21800.0, close=22300.0,
         volume=100000,
         timestamp=datetime(2024, 1, 1, 9, 15),
@@ -41,7 +42,7 @@ def test_candle_valid():
 def test_candle_invalid_high():
     with pytest.raises(ValueError):
         Candle(
-            symbol="TEST", timeframe=1,
+            symbol="TEST", timeframe=1800,
             open=100.0, high=90.0,   # high < open -> invalid
             low=80.0, close=95.0,
             volume=0, timestamp=datetime.now(),
@@ -102,7 +103,8 @@ strategies:
     assert len(cfg.strategies) == 1
     strat = cfg.strategies[0]
     assert strat.id == "STRATEGY_ONE"
-    assert strat.symbols[0].timeframe == 30
+    # BUG FIX: timeframe: 30 (minutes) → _parse_timeframe_seconds → 1800 seconds
+    assert strat.symbols[0].timeframe == 1800
 
 
 def test_config_missing_file():
