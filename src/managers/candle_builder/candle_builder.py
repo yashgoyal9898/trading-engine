@@ -1,116 +1,94 @@
-import asyncio
 import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, Optional
-from src.core.data_model import Tick, Candle
+from datetime import datetime
+
+class Candle:
+    __slots__ = ("symbol", "open", "high", "low", "close", "start_time", "volume")
+
+    def __init__(self, symbol, open, high, low, close, start_time, volume):
+        self.symbol = symbol
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.start_time = start_time
+        self.volume = volume
+
+    def __repr__(self):
+        return (
+            f"Candle(symbol={self.symbol}, O={self.open}, H={self.high}, "
+            f"L={self.low}, C={self.close}, V={self.volume}, "
+            f"T={self.start_time})"
+        )
+
 
 class CandleBuilder:
-    __slots__ = ('event_bus', 'tick_data', 'tick_count', 'last_tick_time', 
-                 'active', 'last_close', 'completion_tasks', 'max_ticks')
-
-    def __init__(self, event_bus, max_ticks: int = 1000):
+    def __init__(self, event_bus, max_ticks=2000):
         self.event_bus = event_bus
-        self.tick_data: Dict[str, np.ndarray] = {}
-        self.tick_count: Dict[str, int] = {}
-        self.last_tick_time: Dict[str, float] = {}
-        self.active: Dict[str, tuple] = {}  # (start_time, open, high, low, close, volume)
-        self.last_close: Dict[str, float] = {}
-        self.completion_tasks: Dict[str, asyncio.Task] = {}
+
+        self.buffers = {}
+        self.count = {}
+        self.active = {}
+        self.last_bucket = {}
+
         self.max_ticks = max_ticks
 
-    def _align_to_candle_boundary(self, dt: datetime, tf: int) -> Optional[datetime]:
-        session_start = dt.replace(hour=9, minute=15, second=0, microsecond=0)
-        if dt < session_start:
-            return None
-        secs = (dt - session_start).total_seconds()
-        return session_start + timedelta(seconds=int(secs // tf) * tf)
+    # ---------- CORE MECHANISM ----------
+    # Normalize → bucket → state transition
 
-    def _ensure_buffer(self, symbol: str) -> None:
-        if symbol not in self.tick_data:
-            self.tick_data[symbol] = np.zeros((self.max_ticks, 3), dtype=np.float64)
-            self.tick_count[symbol] = 0
+    def _normalize_ts(self, ts):
+        # ms → sec
+        return ts / 1000 if ts > 1e12 else ts
 
-    async def process_candle_tick(self, tick: Tick, tf: int) -> None:
-        if not tick or tick.ltp is None or tick.timestamp is None:
+    def _get_bucket(self, ts, tf):
+        return int(ts // tf)
+
+    def _ensure(self, symbol):
+        if symbol not in self.buffers:
+            self.buffers[symbol] = np.zeros((self.max_ticks, 3))
+            self.count[symbol] = 0
+
+    # ---------- MAIN PIPELINE ----------
+    async def process_candle_tick(self, tick, tf):
+        if tick.ltp is None or tick.timestamp is None:
             return
 
         symbol = tick.symbol
-        self._ensure_buffer(symbol)
+        self._ensure(symbol)
 
-        idx = self.tick_count[symbol] % self.max_ticks
-        self.tick_data[symbol][idx] = [tick.timestamp, tick.ltp, tick.volume or 0]
-        self.tick_count[symbol] += 1
-        self.last_tick_time[symbol] = tick.timestamp
+        ts = self._normalize_ts(tick.timestamp)
 
-        now = datetime.now()
-        start = self._align_to_candle_boundary(now, tf)
-        if not start:
+        # ring buffer write (optional analytics)
+        idx = self.count[symbol] % self.max_ticks
+        self.buffers[symbol][idx] = [ts, tick.ltp, tick.volume or 0]
+        self.count[symbol] += 1
+
+        bucket = self._get_bucket(ts, tf)
+
+        # -------- FIRST TICK --------
+        if symbol not in self.last_bucket:
+            self.last_bucket[symbol] = bucket
+            self.active[symbol] = [ts, tick.ltp, tick.ltp, tick.ltp, tick.ltp, tick.volume or 0]
             return
 
-        start_ts = start.timestamp()
+        # -------- BUCKET SWITCH --------
+        if bucket != self.last_bucket[symbol]:
+            await self._close_candle(symbol)
 
-        if symbol not in self.active or self.active[symbol][0] != start_ts:
-            if symbol in self.active:
-                await self._complete_candle(symbol, tf)
+            # new bucket
+            self.last_bucket[symbol] = bucket
+            self.active[symbol] = [ts, tick.ltp, tick.ltp, tick.ltp, tick.ltp, tick.volume or 0]
 
-            self.active[symbol] = (start_ts, tick.ltp, tick.ltp, tick.ltp, tick.ltp, tick.volume or 0)
-
-            delay = (start + timedelta(seconds=tf) - now).total_seconds()
-            if delay > 0:
-                if task := self.completion_tasks.get(symbol):
-                    task.cancel()
-                self.completion_tasks[symbol] = asyncio.create_task(
-                    self._scheduled_complete(symbol, tf, delay)
-                )
+        # -------- SAME BUCKET --------
         else:
-            start_ts, o, h, l, c, v = self.active[symbol]
-            self.active[symbol] = (
-                start_ts, o,
-                max(h, tick.ltp),
-                min(l, tick.ltp),
-                tick.ltp,
-                v + (tick.volume or 0)
-            )
+            c = self.active[symbol]
+            c[2] = max(c[2], tick.ltp)   # high
+            c[3] = min(c[3], tick.ltp)   # low
+            c[4] = tick.ltp              # close
+            c[5] += tick.volume or 0     # volume
 
-    async def _scheduled_complete(self, symbol: str, tf: int, delay: float) -> None:
-        try:
-            await asyncio.sleep(delay)
-            if symbol in self.active:
-                await self._complete_candle(symbol, tf)
-                self.active.pop(symbol, None)
-        except asyncio.CancelledError:
-            pass
-
-    async def _complete_candle(self, symbol: str, tf: int) -> None:
-        if symbol not in self.active:
-            return
-
+    # ---------- CLOSING ----------
+    async def _close_candle(self, symbol):
         start_ts, o, h, l, c, v = self.active[symbol]
-        start = datetime.fromtimestamp(start_ts)
-        end_ts = start_ts + tf
-
-        count = self.tick_count[symbol]
-        if count == 0:
-            return
-
-        n = min(count, self.max_ticks)
-        data = self.tick_data[symbol][:n] if count <= self.max_ticks else \
-               np.roll(self.tick_data[symbol], -count % self.max_ticks, axis=0)
-
-        mask = (data[:, 0] >= start_ts) & (data[:, 0] < end_ts)
-        valid_ticks = data[mask]
-
-        if len(valid_ticks) > 0:
-            prices = valid_ticks[:, 1]
-            o = prices[0]
-            h = np.max(prices)
-            l = np.min(prices)
-            c = prices[-1]
-            v = np.sum(valid_ticks[:, 2])
-        elif (last := self.last_close.get(symbol)) is not None:
-            o = h = l = c = last
-
-        self.last_close[symbol] = c
 
         candle = Candle(
             symbol=symbol,
@@ -118,19 +96,8 @@ class CandleBuilder:
             high=float(h),
             low=float(l),
             close=float(c),
-            start_time=start,
+            start_time=datetime.fromtimestamp(start_ts),
             volume=int(v)
         )
-        await self.event_bus.publish("candle", candle)
 
-    def cleanup_inactive_symbols(self, current_time: float, ttl: int = 3600) -> int:
-        cutoff = current_time - ttl
-        inactive = [s for s, ts in self.last_tick_time.items() if ts < cutoff]
-        for symbol in inactive:
-            self.tick_data.pop(symbol, None)
-            self.tick_count.pop(symbol, None)
-            self.last_tick_time.pop(symbol, None)
-            self.active.pop(symbol, None)
-            if task := self.completion_tasks.pop(symbol, None):
-                task.cancel()
-        return len(inactive)
+        await self.event_bus.publish("candle", candle)
