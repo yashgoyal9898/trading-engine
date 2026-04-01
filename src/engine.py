@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 
-import uvloop  # noqa: F401 — main.py mein uvloop.install() call hoti hai
-               # yahan import sirf clarity ke liye hai ki hum uvloop use kar rahe hain
-
-import src.broker  # noqa: F401 — Fyers data+order broker register hote hain yahan
+import src.broker  # noqa: F401
 
 from .broker.registry import BrokerRegistry
 from .infrastructure.config_loader import AppConfig
@@ -22,23 +20,6 @@ _log = logging.getLogger(__name__)
 
 
 class Engine:
-    """
-    Poore system ka ek orchestrator.
-
-    Start order:
-        1. Logger
-        2. Brokers connect
-        3. Managers banao
-        4. Strategies load + wire
-        5. Symbols subscribe
-        6. Strategies start
-
-    Stop order (bilkul ulta):
-        1. Strategies stop
-        2. Brokers disconnect
-        3. Logger flush + stop
-    """
-
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._data_broker = None
@@ -50,21 +31,23 @@ class Engine:
         self._strategies = []
         self._running = False
 
-    # ------------------------------------------------------------------ #
-    #  Startup
-    # ------------------------------------------------------------------ #
-
     async def start(self) -> None:
-        # 1. Logger sabse pehle start karo
         await logger.start()
         logger.info("=== Engine starting ===")
 
-        # 2. Brokers
+        # Env se credentials lo
+        client_id    = os.environ["CLIENT_ID"]
+        access_token = os.environ["FYERS_ACCESS_TOKEN"]
+
         self._data_broker = BrokerRegistry.get_data_broker(
-            self._config.brokers.data
+            self._config.brokers.data,
+            client_id=client_id,
+            access_token=access_token,
         )
         self._order_broker = BrokerRegistry.get_order_broker(
-            self._config.brokers.order
+            self._config.brokers.order,
+            client_id=client_id,
+            access_token=access_token,
         )
         await self._data_broker.connect()
         await self._order_broker.connect()
@@ -73,7 +56,6 @@ class Engine:
             f"order={self._config.brokers.order}"
         )
 
-        # 3. Managers
         self._candle_manager = CandleManager()
         self._trade_state_manager = TradeStateManager()
         self._symbol_manager = SymbolManager(self._data_broker)
@@ -81,7 +63,6 @@ class Engine:
             self._order_broker, self._trade_state_manager
         )
 
-        # 4. Strategies load + wire
         self._strategies = StrategyRegistry.load(self._config.strategies)
         for strat in self._strategies:
             strat.wire(
@@ -90,7 +71,6 @@ class Engine:
                 self._candle_manager,
             )
 
-        # 5. Symbols subscribe
         for strat_cfg in self._config.strategies:
             if not strat_cfg.enabled:
                 continue
@@ -106,50 +86,29 @@ class Engine:
                     self._candle_manager.on_tick,
                 )
 
-        # 6. Strategies start — uvloop event loop pe run honge (main.py ne install kiya hai)
         await asyncio.gather(*[s.start() for s in self._strategies])
-
         self._running = True
-        logger.info(
-            f"=== Engine running | strategies={len(self._strategies)} ==="
-        )
-
-    # ------------------------------------------------------------------ #
-    #  Shutdown
-    # ------------------------------------------------------------------ #
+        logger.info(f"=== Engine running | strategies={len(self._strategies)} ===")
 
     async def stop(self) -> None:
         logger.info("=== Engine shutting down ===")
         self._running = False
 
-        # 1. Strategies pehle band karo
         if self._strategies:
             await asyncio.gather(
                 *[s.stop() for s in self._strategies],
                 return_exceptions=True,
             )
 
-        # 2. Brokers disconnect
         if self._data_broker:
             await self._data_broker.disconnect()
         if self._order_broker:
             await self._order_broker.disconnect()
 
         logger.info("=== Engine stopped ===")
-
-        # 3. Logger sabse last — sab logs flush ho jayein
         await logger.stop()
 
-    # ------------------------------------------------------------------ #
-    #  Helpers
-    # ------------------------------------------------------------------ #
-
     def _make_candle_dispatcher(self, symbol: str, timeframe: int):
-        """
-        Closed candle ko uss (symbol, timeframe) ko watch karne
-        wali saari strategies tak pohonchata hai.
-        return type: sync wrapper (CandleManager sync callback expect karta hai)
-        """
         strategies = self._strategies
         config_strategies = self._config.strategies
 
@@ -157,8 +116,7 @@ class Engine:
             tasks = []
             for strat in strategies:
                 cfg = next(
-                    (s for s in config_strategies if s.id == strat.strategy_id),
-                    None,
+                    (s for s in config_strategies if s.id == strat.strategy_id), None
                 )
                 if cfg is None:
                     continue
@@ -169,13 +127,11 @@ class Engine:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
         def _sync_wrapper(candle):
-            # uvloop event loop chal raha hai, create_task safe hai
             asyncio.get_event_loop().create_task(_dispatch(candle))
 
         return _sync_wrapper
 
     async def run_forever(self) -> None:
-        """SIGINT / SIGTERM aane tak block karo, phir graceful stop."""
         loop = asyncio.get_running_loop()
         stop_event = asyncio.Event()
 

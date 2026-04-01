@@ -1,9 +1,0 @@
-aiofiles>=25.1.0
-fyers-apiv3==3.1.7
-numpy>=2.4.2
-psutil==7.0.0
-pytest>=9.0.2
-python-dotenv==1.1.1
-pyyaml>=6.0.3
-setuptools==68.2.2
-uvloop>=0.22.1

@@ -1,6 +1,0 @@
-broker
-core
-infrastructure
-managers
-strategies
-utils
