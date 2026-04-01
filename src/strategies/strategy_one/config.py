@@ -6,17 +6,12 @@ from dataclasses import dataclass
 @dataclass
 class StrategyOneParams:
     """
-    Strategy-specific parameters loaded from settings.yml under `params:`.
-    Add your own fields here.
+    settings.yml ke `params:` section se load hota hai.
     """
-    fast_period: int = 9
-    slow_period: int = 21
-    entry_buffer_pts: float = 5.0
+    body_pct_threshold: float = 10.0   # Candle body > 10% of range = entry signal
 
     @classmethod
     def from_dict(cls, d: dict) -> "StrategyOneParams":
         return cls(
-            fast_period=d.get("fast_period", 9),
-            slow_period=d.get("slow_period", 21),
-            entry_buffer_pts=d.get("entry_buffer_pts", 5.0),
+            body_pct_threshold=float(d.get("body_pct_threshold", 10.0)),
         )

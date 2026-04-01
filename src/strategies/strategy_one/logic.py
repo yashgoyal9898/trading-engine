@@ -11,29 +11,42 @@ def compute_entry(
     candle: Candle,
     history: List[Candle],
     params: StrategyOneParams,
+    order_symbol: str,            # Yeh symbol pe order jayega (signal_symbol se alag ho sakta hai)
 ) -> Optional[Signal]:
     """
-    Pure function: given the latest closed candle and history,
-    return a Signal or None.
-    No side effects, no I/O — just logic.
+    Pure function — koi side effect nahi, koi I/O nahi.
 
-    Replace this with your real entry condition.
-    Example: breakout above previous high.
+    Logic:
+        candle_range = high - low
+        body = abs(close - open)
+        body_pct = body / range * 100
+
+        Agar body_pct > threshold:
+            - Bullish (close > open) → BUY order_symbol
+            - Bearish (close < open) → SELL order_symbol
     """
-    if len(history) < 2:
+    candle_range = candle.high - candle.low
+
+    # Doji ya flat candle — skip karo
+    if candle_range < 0.01:
         return None
 
-    prev_high = history[-2].high
-    if candle.close > prev_high + params.entry_buffer_pts:
-        return Signal(
-            symbol=candle.symbol,
-            side=OrderSide.BUY,
-            order_type=OrderType.MARKET,
-            quantity=1,   # TODO: load from config or position sizer
-            sl=candle.low - 10,
-            tag="BREAKOUT_ENTRY",
-        )
-    return None
+    body = abs(candle.close - candle.open)
+    body_pct = (body / candle_range) * 100.0
+
+    if body_pct <= params.body_pct_threshold:
+        return None   # Body chhoti hai, signal nahi
+
+    # Bullish = green candle, Bearish = red candle
+    side = OrderSide.BUY if candle.close > candle.open else OrderSide.SELL
+
+    return Signal(
+        symbol=order_symbol,        # Signal wale symbol pe nahi, ORDER wale pe
+        side=side,
+        order_type=OrderType.MARKET,
+        quantity=1,
+        tag=f"BODY_{body_pct:.1f}pct_{'BULL' if side == OrderSide.BUY else 'BEAR'}",
+    )
 
 
 def compute_exit(
@@ -41,24 +54,19 @@ def compute_exit(
     trade: TradeData,
     params: StrategyOneParams,
 ) -> Optional[Signal]:
-    """
-    Pure function: given the latest closed candle and open trade,
-    return an exit Signal or None.
-    """
-    # SL hit
-    if candle.low <= trade.sl:
+    """SL ya target hit hone pe exit."""
+    if trade.sl > 0 and candle.low <= trade.sl:
         return Signal(
-            symbol=candle.symbol,
+            symbol=trade.symbol,
             side=OrderSide.SELL,
             order_type=OrderType.MARKET,
             quantity=trade.quantity,
             price=trade.sl,
             tag="SL_HIT",
         )
-    # Target hit
     if trade.target > 0 and candle.high >= trade.target:
         return Signal(
-            symbol=candle.symbol,
+            symbol=trade.symbol,
             side=OrderSide.SELL,
             order_type=OrderType.MARKET,
             quantity=trade.quantity,

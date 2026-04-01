@@ -8,10 +8,9 @@ strategies:
     enabled: true
     max_trades: 1
     symbols:
-      - name: NSE:NIFTY50-INDEX
-        mode: tick
-        timeframe: 1
+      - name: NSE:NIFTY50-INDEX   # signal symbol — candle yahan se banega
+        order_symbol: NSE:IDEA-EQ  # order yahan place hoga
+        mode: candle
+        timeframe: 30s              # 30 seconds ("30" likho to 30 min, "30s" = 30 sec)
     params:
-      fast_period: 9
-      slow_period: 21
-      entry_buffer_pts: 5.0
+      body_pct_threshold: 10.0     # candle body > 10% of range = signal

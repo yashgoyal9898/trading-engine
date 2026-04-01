@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple
 
 from ..core.data_model import Candle, Tick
@@ -9,27 +9,31 @@ from ..core.interfaces.icandle_builder import ICandleBuilder
 
 logger = logging.getLogger(__name__)
 
-# Key: (symbol, timeframe_minutes)
+# Key: (symbol, timeframe_in_seconds)
 _BuilderKey = Tuple[str, int]
 
 
 class TimeframeCandleBuilder(ICandleBuilder):
-    """Builds OHLCV candles from ticks for a fixed timeframe."""
+    """
+    Ticks se OHLCV candles banata hai.
+    timeframe ab SECONDS mein hai (minutes nahi).
+    30s candle, 15s candle, 60s candle — sab kuch kaam karta hai.
+    """
 
-    def __init__(self, symbol: str, timeframe: int) -> None:
+    def __init__(self, symbol: str, timeframe_seconds: int) -> None:
         self.symbol = symbol
-        self.timeframe = timeframe
+        self.timeframe = timeframe_seconds   # seconds mein
         self._current: Optional[Candle] = None
         self._bar_open_time: Optional[datetime] = None
 
     def update(self, tick: Tick) -> Optional[Candle]:
         """
-        Feed a tick. Returns closed Candle if bar just ended, else None.
+        Tick do, agar bar band hua toh closed Candle milega, warna None.
         """
         bar_time = self._get_bar_open(tick.timestamp)
 
         if self._current is None or bar_time > self._bar_open_time:
-            # New bar started
+            # Naya bar shuru hua
             closed = None
             if self._current is not None:
                 self._current.is_closed = True
@@ -49,7 +53,7 @@ class TimeframeCandleBuilder(ICandleBuilder):
             )
             return closed
         else:
-            # Update existing bar
+            # Same bar chal raha hai, update karo
             self._current.high = max(self._current.high, tick.ltp)
             self._current.low = min(self._current.low, tick.ltp)
             self._current.close = tick.ltp
@@ -64,23 +68,23 @@ class TimeframeCandleBuilder(ICandleBuilder):
         self._bar_open_time = None
 
     def _get_bar_open(self, ts: datetime) -> datetime:
-        """Truncate timestamp to nearest timeframe boundary."""
-        minutes = ts.hour * 60 + ts.minute
-        bar_start_minutes = (minutes // self.timeframe) * self.timeframe
-        return ts.replace(
-            hour=bar_start_minutes // 60,
-            minute=bar_start_minutes % 60,
-            second=0,
-            microsecond=0,
-        )
+        """
+        Timestamp ko nearest timeframe boundary pe truncate karta hai.
+        Seconds mein kaam karta hai — 30s, 15s, 60s, 1800s sab.
+
+        Example (30s timeframe):
+            09:15:07 -> 09:15:00
+            09:15:31 -> 09:15:30
+        """
+        epoch = int(ts.timestamp())
+        bar_epoch = (epoch // self.timeframe) * self.timeframe
+        return datetime.fromtimestamp(bar_epoch)
 
 
 class CandleManager:
     """
-    Manages per-symbol, per-timeframe candle builders.
-    Strategies register their (symbol, timeframe) pairs.
-    On each tick, CandleManager updates the right builder and
-    calls registered listeners when a candle closes.
+    Har (symbol, timeframe) ke liye ek builder.
+    Multiple strategies ek hi symbol subscribe kar sakti hain — deduplication yahan hota hai.
     """
 
     def __init__(self) -> None:
@@ -90,21 +94,21 @@ class CandleManager:
     def register(
         self,
         symbol: str,
-        timeframe: int,
+        timeframe_seconds: int,
         on_candle: Callable[[Candle], None],
     ) -> None:
-        """Register a closed-candle callback for (symbol, timeframe)."""
-        key = (symbol, timeframe)
+        """(symbol, timeframe_seconds) ke liye closed-candle callback register karo."""
+        key = (symbol, timeframe_seconds)
         if key not in self._builders:
-            self._builders[key] = TimeframeCandleBuilder(symbol, timeframe)
+            self._builders[key] = TimeframeCandleBuilder(symbol, timeframe_seconds)
             self._listeners[key] = []
         self._listeners[key].append(on_candle)
+        logger.info(
+            "CandleManager: registered %s tf=%ds", symbol, timeframe_seconds
+        )
 
     def on_tick(self, tick: Tick) -> None:
-        """
-        Called by SymbolManager for every tick.
-        Update all builders watching this symbol.
-        """
+        """SymbolManager har tick pe yeh call karta hai."""
         for (sym, tf), builder in self._builders.items():
             if sym != tick.symbol:
                 continue
@@ -115,9 +119,9 @@ class CandleManager:
                         cb(closed)
                     except Exception:
                         logger.exception(
-                            "Candle listener error for %s tf=%d", sym, tf
+                            "Candle listener error for %s tf=%ds", sym, tf
                         )
 
-    def get_current(self, symbol: str, timeframe: int) -> Optional[Candle]:
-        return self._builders.get((symbol, timeframe), None) and \
-               self._builders[(symbol, timeframe)].get_current()
+    def get_current(self, symbol: str, timeframe_seconds: int) -> Optional[Candle]:
+        b = self._builders.get((symbol, timeframe_seconds))
+        return b.get_current() if b else None
